@@ -4,6 +4,7 @@ import { requireStaff } from "@/lib/session";
 import { staffUserView } from "@/modules/moderation/service";
 import { NotFoundError } from "@/lib/errors";
 import { LocalTime } from "@/components/local-time";
+import { Avatar } from "@/components/avatar";
 import { UserStaffActions } from "./user-actions";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,7 @@ export default async function StaffUserPage({ params }: { params: Promise<{ id: 
       <div className="space-y-6 lg:col-span-2">
         <header className="card">
           <div className="flex flex-wrap items-center gap-3">
+            <Avatar user={user} size={48} />
             <h1 className="text-xl font-semibold">
               <Link
                 href={`/u/${encodeURIComponent(user.displayName)}`}
@@ -87,6 +89,7 @@ export default async function StaffUserPage({ params }: { params: Promise<{ id: 
         <UserStaffActions
           userId={user.id}
           staffRole={me.actor.staffRole!}
+          hasAvatar={!!user.avatarUpdatedAt}
           notes={user.staffNotes.map((n) => ({
             id: n.id,
             body: n.body,

@@ -4,6 +4,7 @@ import type { ReportStatus } from "@cod/shared";
 import { requireUser } from "@/lib/session";
 import { runAction, type ActionResult } from "@/lib/actions";
 import * as mod from "@/modules/moderation/service";
+import { removeAvatarAsStaff } from "@/modules/identity/avatars";
 import type { EvidenceInput } from "@/app/(site)/report/actions";
 
 export async function assignReportAction(reportId: string, reason: string): Promise<ActionResult> {
@@ -66,5 +67,14 @@ export async function addStaffNoteAction(
     await mod.addStaffNote(actor, { userId, body });
     revalidatePath(backTo);
     return "Note added";
+  });
+}
+
+export async function removeAvatarAction(userId: string, reason: string): Promise<ActionResult> {
+  return runAction(async () => {
+    const { actor } = await requireUser();
+    await removeAvatarAsStaff(actor, userId, reason);
+    revalidatePath(`/staff/users/${userId}`);
+    return "Profile picture removed";
   });
 }

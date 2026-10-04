@@ -147,6 +147,13 @@ three verified matches are needed to be ranked. Suspended or banned players, and
 reports list for cheating, throwing or falsified results, are left off. Boards are rewritten by the worker
 when a match is verified and on a 10-minute schedule.
 
+**Profile pictures** (`apps/web/modules/identity/avatars.ts`). Players upload a PNG, JPEG or WebP (5 MB max)
+from their account page. Every upload is decoded and re-encoded to a 256x256 WebP, which strips metadata
+such as EXIF location, crops to a square, and refuses decompression bombs and non-images. The result is
+stored in Postgres (no object storage needed) and served from `/api/avatars/<id>` with ETags and a
+versioned, long-cached URL. Without a picture a colored initials badge is shown; OAuth avatar URLs are
+deliberately not hotlinked. Staff with `content.remove` can take a picture down with a logged reason.
+
 ## Scripts
 
 | Command                                      | What it does                            |

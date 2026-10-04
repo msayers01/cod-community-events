@@ -4,6 +4,7 @@ import { GameMode, type LeaderboardPeriod } from "@cod/shared";
 import { label } from "@/lib/format";
 import { LocalTime } from "@/components/local-time";
 import { LiveLeaderboard } from "@/components/live-leaderboard";
+import { Avatar } from "@/components/avatar";
 import {
   getLeaderboard,
   isValidMonthKey,
@@ -96,8 +97,9 @@ export default async function LeaderboardsPage({
                 <td>
                   <Link
                     href={`/u/${encodeURIComponent(e.user.displayName)}`}
-                    className="hover:text-accent"
+                    className="inline-flex items-center gap-2 hover:text-accent"
                   >
+                    <Avatar user={e.user} size={24} />
                     {e.user.displayName}
                   </Link>
                 </td>

@@ -9,6 +9,7 @@ import { StatusTag } from "@/components/event-card";
 import { Countdown } from "@/components/countdown";
 import { StatusBanner } from "@/components/status-banner";
 import { GameArt } from "@/components/game-art";
+import { Avatar } from "@/components/avatar";
 import { SignupPanel } from "./signup-panel";
 import { SpinLog } from "./spin-log";
 import { LiveEvent } from "@/components/live-event";
@@ -55,7 +56,8 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             <StatusTag status={event.status} />
             <LiveEvent eventId={event.id} />
           </div>
-          <p className="mt-1 text-muted">
+          <p className="mt-1 flex items-center gap-2 text-muted">
+            <Avatar user={event.hoster.user} size={24} />
             Hosted by{" "}
             <Link
               className="text-ink hover:text-accent"
@@ -216,8 +218,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <li key={r.id} className="flex items-center justify-between">
                 <Link
                   href={`/u/${encodeURIComponent(r.player.displayName)}`}
-                  className="hover:text-accent"
+                  className="flex items-center gap-2 hover:text-accent"
                 >
+                  <Avatar user={r.player} size={22} />
                   {r.player.displayName}
                 </Link>
                 <span className="flex items-center gap-2 text-xs text-muted">

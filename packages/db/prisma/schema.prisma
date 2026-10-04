@@ -43,6 +43,8 @@ model User {
   streamUrl     String?
   bio           String        @default("")
   status        AccountStatus @default(ACTIVE)
+  /// Set when a profile picture is uploaded; also the cache-busting version in avatar URLs.
+  avatarUpdatedAt DateTime?
 
   sessions          Session[]
   accounts          Account[]
@@ -81,6 +83,7 @@ model User {
   blacklistApprovals BlacklistApproval[]
   appeals           Appeal[]              @relation("Appellant")
   appealsHandled    Appeal[]              @relation("AppealHandler")
+  avatar            UserAvatar?
   throwFlags        ThrowFlag[]           @relation("FlaggedUser")
   throwFlagsRelated ThrowFlag[]           @relation("FlagRelatedUser")
   throwFlagsReviewed ThrowFlag[]          @relation("FlagReviewer")
@@ -1098,4 +1101,20 @@ model LeaderboardEntry {
   @@index([period, periodKey, mode, rank])
   @@index([userId])
   @@map("leaderboard_entry")
+}
+
+
+// ───────────────────────────── Profile pictures ─────────────────────────────
+
+/// One small, re-encoded WebP per user (256x256). Kept in the database so it works without
+/// object storage and every upload passes through the same metadata-stripping pipeline.
+model UserAvatar {
+  userId      String   @id
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data        Bytes
+  contentType String   @default("image/webp")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("user_avatar")
 }

@@ -44,7 +44,7 @@ export async function getLeaderboard(
       where: { period, periodKey, mode },
       orderBy: { rank: "asc" },
       take: limit,
-      include: { user: { select: { displayName: true } } },
+      include: { user: { select: { id: true, displayName: true, avatarUpdatedAt: true } } },
     }),
     prisma.leaderboardEntry.aggregate({
       where: { period, periodKey, mode },

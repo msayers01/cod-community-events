@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@cod/db";
 import { label } from "@/lib/format";
 import { LocalTime } from "@/components/local-time";
+import { Avatar } from "@/components/avatar";
 import { getCurrentUser } from "@/lib/session";
 import { hosterPayoutRecord, reputationFor, reviewsForHoster } from "@/modules/reputation/service";
 import { activeEntriesFor } from "@/modules/moderation/blacklist";
@@ -82,6 +83,7 @@ export default async function ProfilePage({
     <div className="mx-auto max-w-3xl space-y-6">
       <header className="card">
         <div className="flex flex-wrap items-center gap-3">
+          <Avatar user={user} size={72} />
           <h1 className="text-2xl font-semibold">{user.displayName}</h1>
           {badges.map((b) => (
             <span key={b} className="tag border-accent/60 text-accent">

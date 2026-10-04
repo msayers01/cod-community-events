@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { signOutAction } from "@/app/(site)/sign-in/actions";
+import { Avatar } from "./avatar";
 
 export function UserMenu({
   user,
@@ -7,7 +8,13 @@ export function UserMenu({
   pendingPayouts,
   pendingConfirmations,
 }: {
-  user: { displayName: string; isHoster: boolean; staff: boolean } | null;
+  user: {
+    id: string;
+    displayName: string;
+    avatarUpdatedAt: Date | null;
+    isHoster: boolean;
+    staff: boolean;
+  } | null;
   unread: number;
   pendingPayouts: number;
   pendingConfirmations: number;
@@ -43,7 +50,11 @@ export function UserMenu({
           </span>
         )}
       </Link>
-      <Link href={`/u/${encodeURIComponent(user.displayName)}`} className="hover:text-accent">
+      <Link
+        href={`/u/${encodeURIComponent(user.displayName)}`}
+        className="flex items-center gap-2 hover:text-accent"
+      >
+        <Avatar user={user} size={24} />
         {user.displayName}
         {user.staff && <span className="tag ml-2">Staff</span>}
       </Link>

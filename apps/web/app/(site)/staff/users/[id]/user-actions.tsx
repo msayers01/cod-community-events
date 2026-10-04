@@ -1,17 +1,23 @@
 "use client";
 import { useState, useTransition } from "react";
 import type { StaffRole } from "@cod/shared";
-import { addStaffNoteAction, issueSanctionAction } from "@/app/(site)/staff/actions";
+import {
+  addStaffNoteAction,
+  issueSanctionAction,
+  removeAvatarAction,
+} from "@/app/(site)/staff/actions";
 import type { ActionResult } from "@/lib/actions";
 import { FormMessage } from "@/components/form-message";
 
 export function UserStaffActions({
   userId,
   staffRole,
+  hasAvatar,
   notes,
 }: {
   userId: string;
   staffRole: StaffRole;
+  hasAvatar: boolean;
   notes: { id: string; body: string; author: string; at: string }[];
 }) {
   const [result, setResult] = useState<ActionResult | null>(null);
@@ -61,6 +67,24 @@ export function UserStaffActions({
           Add note
         </button>
       </section>
+      {hasAvatar && (
+        <section className="card space-y-2 text-sm">
+          <h2 className="font-semibold">Profile picture</h2>
+          <p className="text-xs text-muted">
+            Removes the picture from their profile. The reason below is logged.
+          </p>
+          <button
+            className="btn btn-danger w-full justify-center"
+            disabled={pending || reason.trim().length < 10}
+            onClick={() =>
+              confirm("Remove this user's profile picture?") &&
+              run(() => removeAvatarAction(userId, reason))
+            }
+          >
+            Remove picture
+          </button>
+        </section>
+      )}
       <section className="card space-y-2 text-sm">
         <h2 className="font-semibold">Sanction</h2>
         <textarea

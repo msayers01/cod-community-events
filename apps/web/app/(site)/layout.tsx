@@ -54,7 +54,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               user={
                 user
                   ? {
+                      id: user.id,
                       displayName: user.displayName,
+                      avatarUpdatedAt: user.avatarUpdatedAt,
                       isHoster: user.actor.isHoster,
                       staff: !!user.actor.staffRole,
                     }
