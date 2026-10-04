@@ -69,6 +69,12 @@ export async function cleanup() {
     select: { id: true },
   });
   const ids = users.map((u) => u.id);
+  await prisma.throwFlag.deleteMany({
+    where: {
+      OR: [{ userId: { in: ids } }, { relatedUserId: { in: ids } }, { reviewedById: { in: ids } }],
+    },
+  });
+  await prisma.season.deleteMany({ where: { createdById: { in: ids } } });
   await prisma.appeal.deleteMany({ where: { appellantId: { in: ids } } });
   await prisma.blacklistEntry.deleteMany({
     where: { OR: [{ userId: { in: ids } }, { proposedById: { in: ids } }] },
@@ -88,4 +94,71 @@ export async function cleanup() {
   });
   const keep = new Set(logged.map((l) => l.staffUserId));
   await prisma.user.deleteMany({ where: { id: { in: ids.filter((id) => !keep.has(id)) } } });
+}
+
+/**
+ * Insert a finished, verified match straight into the database (bypassing the submission
+ * flow) so history-based features can be tested with a lot of matches cheaply.
+ */
+export async function makeVerifiedMatch(input: {
+  eventId: string;
+  teamA: string[];
+  teamB: string[];
+  winner: "A" | "B";
+  /** Per-player kills/deaths; players not listed get no stat row. */
+  stats?: Record<string, { kills: number; deaths: number }>;
+  at?: Date;
+}) {
+  const at = input.at ?? new Date();
+  const roundNumber = (await prisma.round.count({ where: { eventId: input.eventId } })) + 1;
+  const round = await prisma.round.create({
+    data: { eventId: input.eventId, roundNumber, status: "COMPLETE" },
+  });
+  const [a, b] = await Promise.all(
+    [
+      ["Team A", input.teamA],
+      ["Team B", input.teamB],
+    ].map(([label, members]) =>
+      prisma.roundTeam.create({
+        data: {
+          roundId: round.id,
+          label: label as string,
+          members: { create: (members as string[]).map((userId) => ({ userId })) },
+        },
+      }),
+    ),
+  );
+  const winningTeamId = input.winner === "A" ? a!.id : b!.id;
+  const match = await prisma.match.create({
+    data: {
+      roundId: round.id,
+      teamAId: a!.id,
+      teamBId: b!.id,
+      status: "VERIFIED",
+      winningTeamId,
+    },
+  });
+  const submission = await prisma.resultSubmission.create({
+    data: {
+      matchId: match.id,
+      submittedById: input.teamA[0]!,
+      screenshotUrl: "https://i.imgur.com/scoreboard.png",
+      scoreA: input.winner === "A" ? 6 : 3,
+      scoreB: input.winner === "A" ? 3 : 6,
+      winningTeamId,
+      status: "VERIFIED",
+      verificationDeadline: at,
+      resolvedAt: at,
+      stats: {
+        create: Object.entries(input.stats ?? {}).map(([playerId, s]) => ({
+          matchId: match.id,
+          playerId,
+          kills: s.kills,
+          deaths: s.deaths,
+          verified: true,
+        })),
+      },
+    },
+  });
+  return { match, submission, teamAId: a!.id, teamBId: b!.id };
 }

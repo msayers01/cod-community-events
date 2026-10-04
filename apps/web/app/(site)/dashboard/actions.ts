@@ -33,6 +33,7 @@ export async function createEventAction(
       startsAt: localToUtc(String(raw.startsAt), tz),
       checkInOpensAt: localToUtc(String(raw.checkInOpensAt), tz),
       checkInClosesAt: localToUtc(String(raw.checkInClosesAt), tz),
+      game: raw.game ? String(raw.game) : null,
       teamSize: Number(raw.teamSize),
       roundCount: raw.roundCount ? Number(raw.roundCount) : null,
       playerCap: Number(raw.playerCap),

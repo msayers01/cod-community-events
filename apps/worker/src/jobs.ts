@@ -2,7 +2,15 @@ import { Queue, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { prisma, emit } from "@cod/db";
 import { createPublisher, rooms, type Publisher } from "@cod/realtime";
-import { expireBlacklistEntries, sweepVerificationWindows } from "@cod/core";
+import {
+  expireBlacklistEntries,
+  processPendingReadings,
+  sweepLeaderboards,
+  sweepVerificationWindows,
+} from "@cod/core";
+import { createTesseractEngine } from "./ocr-engine.js";
+import { cutRegions } from "./preprocess.js";
+import { loadScreenshot } from "./screenshots.js";
 
 let publisher: Publisher | null = null;
 const rt = () => (publisher ??= createPublisher());
@@ -14,7 +22,40 @@ export type TimerJob =
   | { kind: "sweep-check-in" }
   | { kind: "sweep-payout-reminders" }
   | { kind: "sweep-verification-windows" }
-  | { kind: "sweep-blacklist-expiry" };
+  | { kind: "sweep-blacklist-expiry" }
+  | { kind: "sweep-screenshot-readings" }
+  | { kind: "sweep-leaderboards" };
+
+/**
+ * Every recurring job and how often it runs. Typed against TimerJob so a sweep that
+ * handleTimer knows about cannot be left unscheduled without the compiler noticing.
+ */
+type SweepKind = Exclude<TimerJob, { eventId: string }>["kind"];
+const MIN = 60_000;
+const SWEEP_EVERY: Record<SweepKind, number> = {
+  "sweep-check-in": 30_000,
+  "sweep-verification-windows": MIN,
+  "sweep-payout-reminders": 15 * MIN,
+  "sweep-blacklist-expiry": 15 * MIN,
+  "sweep-screenshot-readings": 15_000,
+  "sweep-leaderboards": 10 * MIN,
+};
+export const SWEEP_SCHEDULE = (Object.entries(SWEEP_EVERY) as [SweepKind, number][]).map(
+  ([kind, every]) => ({ kind, every }),
+);
+
+const ocr = createTesseractEngine();
+export const closeOcr = () => ocr.close();
+
+/** Tell anyone watching a leaderboard that it was recalculated. Best-effort. */
+export async function announceBoards(boards: { period: string; periodKey: string }[]) {
+  for (const b of boards)
+    await rt().publish({
+      room: rooms.leaderboards(),
+      event: "leaderboard.updated",
+      data: { period: b.period, periodKey: b.periodKey },
+    });
+}
 
 export function redis() {
   return new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
@@ -52,6 +93,14 @@ export async function handleTimer(job: Job<TimerJob>) {
   }
   if (data.kind === "sweep-verification-windows") {
     await sweepVerificationWindows();
+    return;
+  }
+  if (data.kind === "sweep-screenshot-readings") {
+    await processPendingReadings({ engine: ocr, load: loadScreenshot, regions: cutRegions });
+    return;
+  }
+  if (data.kind === "sweep-leaderboards") {
+    await announceBoards(await sweepLeaderboards());
     return;
   }
   if (data.kind === "sweep-blacklist-expiry") {

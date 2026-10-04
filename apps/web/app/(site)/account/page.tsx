@@ -3,6 +3,7 @@ import { prisma } from "@cod/db";
 import { getCurrentUser } from "@/lib/session";
 import Link from "next/link";
 import { ProfileForm } from "./form";
+import { AvatarUploader } from "./avatar-uploader";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,9 @@ export default async function AccountPage() {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: current.id },
     select: {
+      id: true,
       displayName: true,
+      avatarUpdatedAt: true,
       activisionId: true,
       streamUrl: true,
       bio: true,
@@ -35,6 +38,7 @@ export default async function AccountPage() {
           Payout confirmations
         </Link>
       </p>
+      <AvatarUploader user={user} />
       <ProfileForm initial={user} />
       <section className="card mt-6 text-sm">
         <h2 className="mb-2 font-semibold">Linked accounts</h2>

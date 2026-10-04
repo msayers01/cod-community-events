@@ -6,6 +6,10 @@ import { getCurrentUser } from "@/lib/session";
 import { label, money } from "@/lib/format";
 import { LocalTime } from "@/components/local-time";
 import { StatusTag } from "@/components/event-card";
+import { Countdown } from "@/components/countdown";
+import { StatusBanner } from "@/components/status-banner";
+import { GameArt } from "@/components/game-art";
+import { Avatar } from "@/components/avatar";
 import { SignupPanel } from "./signup-panel";
 import { SpinLog } from "./spin-log";
 import { LiveEvent } from "@/components/live-event";
@@ -45,13 +49,15 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
+        <GameArt game={event.game} className="h-40 rounded border border-line sm:h-52" priority />
         <header>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold tracking-tight">{event.title}</h1>
             <StatusTag status={event.status} />
             <LiveEvent eventId={event.id} />
           </div>
-          <p className="mt-1 text-muted">
+          <p className="mt-1 flex items-center gap-2 text-muted">
+            <Avatar user={event.hoster.user} size={24} />
             Hosted by{" "}
             <Link
               className="text-ink hover:text-accent"
@@ -63,6 +69,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             {event.hoster.foundingHoster && <span className="tag ml-2">Founding Hoster</span>}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
+            {event.game && (
+              <span className="tag border-accent/60 text-accent">{label(event.game)}</span>
+            )}
             <span className="tag">{label(event.mode)}</span>
             <span className="tag">
               {event.teamSize}v{event.teamSize} {label(event.format)}
@@ -71,13 +80,25 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             <span className="tag">{label(event.region)}</span>
             <span className="tag">{label(event.platform)}</span>
             <span className="tag">{label(event.entryType)}</span>
+            {event.randomization !== "RANDOM" && (
+              <span className="tag">{label(event.randomization)} teams</span>
+            )}
           </div>
         </header>
+
+        <StatusBanner
+          status={event.status}
+          cancelReason={event.cancelReason}
+          cancelledAt={event.cancelledAt}
+        />
 
         <section className="card grid gap-4 sm:grid-cols-3">
           <div>
             <p className="label">Starts</p>
             <LocalTime date={event.startsAt} />
+            <div className="mt-1">
+              <Countdown startsAt={event.startsAt} status={event.status} />
+            </div>
           </div>
           <div>
             <p className="label">Check-in</p>
@@ -197,8 +218,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <li key={r.id} className="flex items-center justify-between">
                 <Link
                   href={`/u/${encodeURIComponent(r.player.displayName)}`}
-                  className="hover:text-accent"
+                  className="flex items-center gap-2 hover:text-accent"
                 >
+                  <Avatar user={r.player} size={22} />
                   {r.player.displayName}
                 </Link>
                 <span className="flex items-center gap-2 text-xs text-muted">

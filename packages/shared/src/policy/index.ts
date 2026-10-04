@@ -27,7 +27,9 @@ export type Permission =
   | "content.remove"
   | "dispute.resolve" // staff-level dispute review (hosters resolve their own via event ownership)
   | "appeal.decide"
-  | "appeal.final"; // final rulings
+  | "appeal.final" // final rulings
+  | "throwflag.review" // see and work the throw-detection queue
+  | "season.manage"; // define leaderboard seasons
 
 const STAFF_RANK: Record<StaffRole, number> = {
   TRIAL_MODERATOR: 1,
@@ -53,6 +55,8 @@ const MIN_RANK: Record<Permission, number | "hoster" | "any"> = {
   "dispute.resolve": STAFF_RANK.TRIAL_MODERATOR,
   "appeal.decide": STAFF_RANK.MODERATOR,
   "appeal.final": STAFF_RANK.ADMIN,
+  "throwflag.review": STAFF_RANK.MODERATOR,
+  "season.manage": STAFF_RANK.ADMIN,
 };
 
 /** Which sanction types each permission level may issue. */

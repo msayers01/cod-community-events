@@ -1,4 +1,6 @@
 import { DisputeActions } from "./dispute-actions";
+import { ReadingNote } from "./reading-note";
+import { readingView } from "@/modules/matches/service";
 
 type Item = Awaited<ReturnType<typeof import("@/modules/matches/service").reviewQueue>>[number];
 
@@ -46,6 +48,9 @@ export function DisputeList({
                 screenshot
               </a>
             </p>
+            <ReadingNote
+              reading={readingView(s.reading, [...s.match.teamA.members, ...s.match.teamB.members])}
+            />
             <ul className="mt-2 space-y-1 text-xs">
               {s.confirmations.map((c) => (
                 <li key={c.id}>

@@ -1,7 +1,15 @@
 "use client";
 import { useActionState, useState } from "react";
 import { useClientValue } from "@/lib/use-client-value";
-import { EntryType, GameMode, Platform, Region, type EventTemplateSettings } from "@cod/shared";
+import {
+  EntryType,
+  Game,
+  GameMode,
+  Platform,
+  RandomizationMode,
+  Region,
+  type EventTemplateSettings,
+} from "@cod/shared";
 import { createEventAction } from "@/app/(site)/dashboard/actions";
 import { FormMessage } from "@/components/form-message";
 import { label } from "@/lib/format";
@@ -11,6 +19,7 @@ export function NewEventForm({ template }: { template: EventTemplateSettings | n
   const t = template;
   const [format, setFormat] = useState<string>(t?.format ?? "SWITCHEROO");
   const [entryType, setEntryType] = useState<string>(t?.entryType ?? "OPEN");
+  const [randomization, setRandomization] = useState<string>(t?.randomization ?? "RANDOM");
   const tz = useClientValue(() => String(new Date().getTimezoneOffset()), "0");
 
   return (
@@ -85,6 +94,13 @@ export function NewEventForm({ template }: { template: EventTemplateSettings | n
           defaultValue={t ? t.payoutSplit.map((p) => p.percent).join("/") : "70/30"}
         />
         <SelectField
+          label="Game"
+          name="game"
+          options={Object.values(Game)}
+          defaultValue={t?.game ?? undefined}
+          optional
+        />
+        <SelectField
           label="Region"
           name="region"
           options={Object.values(Region)}
@@ -102,6 +118,16 @@ export function NewEventForm({ template }: { template: EventTemplateSettings | n
           options={Object.values(EntryType)}
           onChange={setEntryType}
         />
+        <div>
+          <SelectField
+            label="Team formation"
+            name="randomization"
+            options={Object.values(RandomizationMode)}
+            defaultValue={t?.randomization}
+            onChange={setRandomization}
+          />
+          <p className="mt-1 text-xs text-muted">{RANDOMIZATION_HELP[randomization]}</p>
+        </div>
         {entryType === "REQUIREMENT_BASED" && (
           <Field
             label="Min completed events"
@@ -165,6 +191,14 @@ export function NewEventForm({ template }: { template: EventTemplateSettings | n
   );
 }
 
+const RANDOMIZATION_HELP: Record<string, string> = {
+  RANDOM: "Fully random spin. The default, and what most players expect.",
+  SKILL_BALANCED:
+    "Still a provably fair spin, but players are spread across teams by verified rating so no team stacks the strongest players. Ratings are published with each spin.",
+  NO_REPEAT_TEAMMATES:
+    "Still a provably fair spin, but swaps are made so players are not paired with the same teammates from earlier rounds when avoidable.",
+};
+
 function Field({
   label: l,
   name,
@@ -186,12 +220,15 @@ function SelectField({
   options,
   defaultValue,
   onChange,
+  optional,
 }: {
   label: string;
   name: string;
   options: string[];
   defaultValue?: string;
   onChange?: (v: string) => void;
+  /** Adds a leading "Not specified" choice that submits an empty value. */
+  optional?: boolean;
 }) {
   return (
     <div>
@@ -202,9 +239,10 @@ function SelectField({
         id={name}
         name={name}
         className="input"
-        defaultValue={defaultValue ?? options[0]}
+        defaultValue={defaultValue ?? (optional ? "" : options[0])}
         onChange={(e) => onChange?.(e.target.value)}
       >
+        {optional && <option value="">Not specified</option>}
         {options.map((o) => (
           <option key={o} value={o}>
             {label(o)}

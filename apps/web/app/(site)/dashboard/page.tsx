@@ -5,6 +5,7 @@ import { listHosterEvents } from "@/modules/events/service";
 import { registerAsHosterAction } from "./actions";
 import { StatusTag } from "@/components/event-card";
 import { LocalTime } from "@/components/local-time";
+import { Countdown } from "@/components/countdown";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +73,8 @@ export default async function DashboardPage() {
               <div>
                 <p className="font-medium">{e.title}</p>
                 <p className="text-xs text-muted">
-                  <LocalTime date={e.startsAt} />
+                  <LocalTime date={e.startsAt} /> ·{" "}
+                  <Countdown startsAt={e.startsAt} status={e.status} />
                 </p>
               </div>
               <div className="flex items-center gap-3 text-sm">

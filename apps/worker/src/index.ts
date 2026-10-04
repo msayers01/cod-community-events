@@ -4,7 +4,7 @@ import { initSentry } from "./sentry.js";
 initSentry("worker");
 import { prisma } from "@cod/db";
 import { processOutboxBatch } from "./outbox.js";
-import { redis, startTimerWorker, timerQueue } from "./jobs.js";
+import { closeOcr, redis, startTimerWorker, SWEEP_SCHEDULE, timerQueue } from "./jobs.js";
 
 const OUTBOX_INTERVAL_MS = 1000;
 
@@ -16,18 +16,17 @@ async function main() {
     console.error(`[timers] ${job?.data.kind} failed: ${err.message}`),
   );
 
-  // Repeatable sweep every 30s (idempotent; BullMQ dedupes by job id).
-  await queue.upsertJobScheduler(
-    "sweep-check-in",
-    { every: 30_000 },
-    { name: "sweep", data: { kind: "sweep-check-in" } },
-  );
+  // Repeatable sweeps. Every job is idempotent and BullMQ dedupes schedulers by id, so
+  // restarting or running several workers never double-schedules.
+  for (const { kind, every } of SWEEP_SCHEDULE)
+    await queue.upsertJobScheduler(kind, { every }, { name: "sweep", data: { kind } });
 
   console.log("[worker] started");
   let running = true;
   const stop = async () => {
     running = false;
     await worker.close();
+    await closeOcr();
     await queue.close();
     await prisma.$disconnect();
     connection.disconnect();

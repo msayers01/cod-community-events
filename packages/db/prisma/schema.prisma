@@ -43,6 +43,8 @@ model User {
   streamUrl     String?
   bio           String        @default("")
   status        AccountStatus @default(ACTIVE)
+  /// Set when a profile picture is uploaded; also the cache-busting version in avatar URLs.
+  avatarUpdatedAt DateTime?
 
   sessions          Session[]
   accounts          Account[]
@@ -81,6 +83,12 @@ model User {
   blacklistApprovals BlacklistApproval[]
   appeals           Appeal[]              @relation("Appellant")
   appealsHandled    Appeal[]              @relation("AppealHandler")
+  avatar            UserAvatar?
+  throwFlags        ThrowFlag[]           @relation("FlaggedUser")
+  throwFlagsRelated ThrowFlag[]           @relation("FlagRelatedUser")
+  throwFlagsReviewed ThrowFlag[]          @relation("FlagReviewer")
+  leaderboardEntries LeaderboardEntry[]
+  seasonsCreated    Season[]
 
   @@map("user")
 }
@@ -187,6 +195,20 @@ enum EntryType {
   INVITE_ONLY
 }
 
+/// Which Call of Duty title an event is played in. Null on events created before this existed.
+enum Game {
+  MW3
+  BO6
+  BO7
+  MW4
+}
+
+enum RandomizationMode {
+  RANDOM
+  SKILL_BALANCED
+  NO_REPEAT_TEAMMATES
+}
+
 enum Platform {
   PC
   PLAYSTATION
@@ -251,6 +273,7 @@ model Event {
   slug              String        @unique
   description       String        @default("")
   mode              GameMode
+  game              Game?
   format            EventFormat
   teamSize          Int
   roundCount        Int?
@@ -263,6 +286,8 @@ model Event {
   rules             Json
   entryType         EntryType     @default(OPEN)
   entryRequirements Json?
+  /// How the wheel forms teams. RANDOM is the default; the others are hoster opt-ins.
+  randomization     RandomizationMode @default(RANDOM)
   startsAt          DateTime
   checkInOpensAt    DateTime
   checkInClosesAt   DateTime
@@ -638,6 +663,11 @@ model Match {
   @@map("match")
 }
 
+enum StatSource {
+  MANUAL
+  OCR
+}
+
 model ResultSubmission {
   id                   String           @id @default(cuid())
   matchId              String
@@ -658,6 +688,7 @@ model ResultSubmission {
   stats         PlayerMatchStat[]
   confirmations Confirmation[]
   resolution    DisputeResolution?
+  reading       ScreenshotReading?
 
   @@index([matchId])
   @@index([status, verificationDeadline])
@@ -678,6 +709,8 @@ model PlayerMatchStat {
   defuses         Int?
   hillTimeSeconds Int?
   verified        Boolean          @default(false)
+  /// MANUAL = typed in by the submitter; OCR = read from the screenshot by the worker.
+  source          StatSource       @default(MANUAL)
 
   @@unique([submissionId, playerId])
   @@index([playerId, verified])
@@ -938,4 +971,150 @@ model DiscordServerConfig {
 
   @@unique([guildId, channelId])
   @@map("discord_server_config")
+}
+
+
+// ───────────────────────────── Phase 3: screenshot text recognition ─────────────────────────────
+
+enum ReadingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+/// What the worker read from a submission's scoreboard screenshot. Advisory only:
+/// it never verifies anything, it fills blanks and highlights disagreements.
+model ScreenshotReading {
+  id            String           @id @default(cuid())
+  submissionId  String           @unique
+  submission    ResultSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  status        ReadingStatus    @default(PENDING)
+  provider      String           @default("tesseract")
+  rawText       String?
+  /// Mean word confidence 0-100 as reported by the engine.
+  confidence    Float?
+  /// Parsed scoreboard rows: [{ name, kills, deaths, ..., playerId | null }]
+  rows          Json             @default("[]")
+  /// Per-field differences between the reading and the submitted result.
+  discrepancies Json             @default("[]")
+  /// True when the reading filled in stats the submitter left blank.
+  filledStats   Boolean          @default(false)
+  error         String?
+  attempts      Int              @default(0)
+  startedAt     DateTime?
+  createdAt     DateTime         @default(now())
+  completedAt   DateTime?
+
+  @@index([status])
+  @@map("screenshot_reading")
+}
+
+// ───────────────────────────── Phase 3: throw detection ─────────────────────────────
+
+enum ThrowSignal {
+  PERFORMANCE_DROP
+  EVENT_LOSS_STREAK
+  TEAMMATE_LOSS_PATTERN
+}
+
+enum ThrowFlagStatus {
+  OPEN
+  UNDER_REVIEW
+  DISMISSED
+  ESCALATED
+}
+
+/// An anomaly raised for moderator review. Never an accusation and never triggers
+/// a sanction by itself. Detection thresholds live in code and are not stored here.
+/// Staff-only: no public read path may include this table.
+model ThrowFlag {
+  id            String          @id @default(cuid())
+  userId        String
+  user          User            @relation("FlaggedUser", fields: [userId], references: [id])
+  signal        ThrowSignal
+  /// Dedup key within (user, signal): match id, event id, or partner user id.
+  scopeKey      String
+  eventId       String?
+  matchId       String?
+  relatedUserId String?
+  relatedUser   User?           @relation("FlagRelatedUser", fields: [relatedUserId], references: [id])
+  /// Anomaly strength; larger is stranger. Used only to order the staff queue.
+  score         Float
+  details       Json
+  status        ThrowFlagStatus @default(OPEN)
+  reviewedById  String?
+  reviewedBy    User?           @relation("FlagReviewer", fields: [reviewedById], references: [id])
+  reviewNote    String?
+  reportId      String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  resolvedAt    DateTime?
+
+  @@unique([userId, signal, scopeKey])
+  @@index([status, score])
+  @@index([userId])
+  @@map("throw_flag")
+}
+
+// ───────────────────────────── Phase 3: leaderboards ─────────────────────────────
+
+enum LeaderboardPeriod {
+  MONTH
+  SEASON
+  ALL_TIME
+}
+
+model Season {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  startsAt    DateTime
+  endsAt      DateTime
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([startsAt, endsAt])
+  @@map("season")
+}
+
+/// Pre-calculated standings. Rewritten wholesale per (period, periodKey, mode) by the worker.
+model LeaderboardEntry {
+  id        String            @id @default(cuid())
+  period    LeaderboardPeriod
+  /// "2026-10" for MONTH, the season id for SEASON, "all" for ALL_TIME.
+  periodKey String
+  mode      GameMode
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rank      Int
+  points    Int
+  matches   Int
+  wins      Int
+  losses    Int
+  kills     Int               @default(0)
+  deaths    Int               @default(0)
+  updatedAt DateTime          @updatedAt
+
+  @@unique([period, periodKey, mode, userId])
+  @@index([period, periodKey, mode, rank])
+  @@index([userId])
+  @@map("leaderboard_entry")
+}
+
+
+// ───────────────────────────── Profile pictures ─────────────────────────────
+
+/// One small, re-encoded WebP per user (256x256). Kept in the database so it works without
+/// object storage and every upload passes through the same metadata-stripping pipeline.
+model UserAvatar {
+  userId      String   @id
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data        Bytes
+  contentType String   @default("image/webp")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("user_avatar")
 }

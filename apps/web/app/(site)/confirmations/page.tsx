@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
-import { pendingConfirmationsFor } from "@/modules/matches/service";
+import { pendingConfirmationsFor, readingView } from "@/modules/matches/service";
 import { ConfirmCard } from "./confirm-card";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +36,9 @@ export default async function ConfirmationsPage() {
               round: s.match.round.roundNumber,
               teamA: s.match.teamA.members.map((m) => m.user.displayName),
               teamB: s.match.teamB.members.map((m) => m.user.displayName),
+              reading: readingView(s.reading, [...s.match.teamA.members, ...s.match.teamB.members]),
               stats: s.stats.map((st) => ({
+                fromScreenshot: st.source === "OCR",
                 name: st.player.displayName,
                 kills: st.kills,
                 deaths: st.deaths,

@@ -10,6 +10,7 @@ export const DEV_SESSION_COOKIE = "cod_dev_user";
 export interface CurrentUser {
   id: string;
   displayName: string;
+  avatarUpdatedAt: Date | null;
   status: string;
   actor: Actor;
 }
@@ -31,6 +32,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     select: {
       id: true,
       displayName: true,
+      avatarUpdatedAt: true,
       status: true,
       staffRole: { select: { role: true } },
       hosterProfile: { select: { userId: true } },
@@ -40,6 +42,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   return {
     id: user.id,
     displayName: user.displayName,
+    avatarUpdatedAt: user.avatarUpdatedAt,
     status: user.status,
     actor: {
       userId: user.id,

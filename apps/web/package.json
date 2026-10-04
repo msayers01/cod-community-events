@@ -9,24 +9,27 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.900.0",
+    "@aws-sdk/s3-request-presigner": "^3.900.0",
+    "@cod/core": "workspace:*",
     "@cod/db": "workspace:*",
+    "@cod/realtime": "workspace:*",
     "@cod/shared": "workspace:*",
+    "@sentry/nextjs": "^11.4.0",
     "better-auth": "^1.7.7",
     "next": "^16.3.8",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "zod": "^4.3.3",
-    "@cod/realtime": "workspace:*",
+    "sharp": "^0.34.5",
     "socket.io-client": "^4.8.4",
-    "@aws-sdk/client-s3": "^3.900.0",
-    "@aws-sdk/s3-request-presigner": "^3.900.0",
-    "@sentry/nextjs": "^11.4.0",
-    "@cod/core": "workspace:*"
+    "zod": "^4.3.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",

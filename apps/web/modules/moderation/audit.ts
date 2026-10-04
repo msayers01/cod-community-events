@@ -12,7 +12,9 @@ export interface AuditInput {
     | "match"
     | "blacklist"
     | "appeal"
-    | "review";
+    | "review"
+    | "throw_flag"
+    | "season";
   targetId: string;
   reason: string;
   metadata?: Prisma.InputJsonValue;

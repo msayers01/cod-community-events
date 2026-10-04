@@ -5,6 +5,8 @@ import { respondToSubmissionAction } from "./actions";
 import type { ActionResult } from "@/lib/actions";
 import { FormMessage } from "@/components/form-message";
 import { LocalTime } from "@/components/local-time";
+import { ReadingNote } from "@/components/reading-note";
+import type { ReadingView } from "@/modules/matches/service";
 
 export interface SubmissionView {
   id: string;
@@ -19,7 +21,9 @@ export interface SubmissionView {
   round: number;
   teamA: string[];
   teamB: string[];
+  reading: ReadingView | null;
   stats: {
+    fromScreenshot: boolean;
     name: string;
     kills: number;
     deaths: number;
@@ -83,6 +87,7 @@ export function ConfirmCard({ submission: s }: { submission: SubmissionView }) {
           className="max-h-72 w-full object-contain bg-bg"
         />
       </a>
+      <ReadingNote reading={s.reading} />
       {s.stats.length > 0 && (
         <table className="mt-3 w-full text-xs">
           <thead className="text-left text-muted">
@@ -103,7 +108,10 @@ export function ConfirmCard({ submission: s }: { submission: SubmissionView }) {
           <tbody>
             {s.stats.map((st) => (
               <tr key={st.name} className="border-t border-line">
-                <td className="py-1">{st.name}</td>
+                <td className="py-1">
+                  {st.name}
+                  {st.fromScreenshot && <span className="tag ml-2">read from screenshot</span>}
+                </td>
                 <td>{st.kills}</td>
                 <td>{st.deaths}</td>
                 {s.mode === "SND" ? (

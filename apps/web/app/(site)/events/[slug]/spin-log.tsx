@@ -1,4 +1,12 @@
 import { LocalTime } from "@/components/local-time";
+import { label } from "@/lib/format";
+
+const MODE_NOTE: Record<string, string> = {
+  SKILL_BALANCED:
+    "Skill-balanced: players are ranked by the published ratings, one from each rating tier lands on every team, and the secret decides who goes where.",
+  NO_REPEAT_TEAMMATES:
+    "No repeat teammates: the secret decides a random draw, then swaps reduce pairings that already played together this event (counts published in the pool).",
+};
 
 interface Member {
   user: { id: string; displayName: string };
@@ -79,6 +87,16 @@ export function SpinLog({ rounds }: { rounds: Round[] }) {
                 <dd className="break-all">
                   {r.spin.revealedSecret ?? "(revealed after the spin)"}
                 </dd>
+                {(r.spin.pool as { mode?: string } | null)?.mode &&
+                  (r.spin.pool as { mode: string }).mode !== "RANDOM" && (
+                    <>
+                      <dt>team formation</dt>
+                      <dd>
+                        {label((r.spin.pool as { mode: string }).mode)}.{" "}
+                        {MODE_NOTE[(r.spin.pool as { mode: string }).mode]}
+                      </dd>
+                    </>
+                  )}
                 <dt>pool</dt>
                 <dd className="break-all">{JSON.stringify(r.spin.pool)}</dd>
               </dl>

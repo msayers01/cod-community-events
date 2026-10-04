@@ -172,6 +172,7 @@ export async function listPublicEvents(filter: EventFilter) {
   const where: Prisma.EventWhereInput = {
     status: { in: PUBLIC_STATUSES },
     ...(filter.mode && { mode: filter.mode }),
+    ...(filter.game && { game: filter.game }),
     ...(filter.format && { format: filter.format }),
     ...(filter.region && { region: filter.region }),
     ...(filter.platform && { platform: filter.platform }),
@@ -210,11 +211,19 @@ export async function getEventBySlug(slug: string) {
   const event = await prisma.event.findUnique({
     where: { slug },
     include: {
-      hoster: { include: { user: { select: { id: true, displayName: true, streamUrl: true } } } },
+      hoster: {
+        include: {
+          user: { select: { id: true, displayName: true, streamUrl: true, avatarUpdatedAt: true } },
+        },
+      },
       registrations: {
         where: { status: { notIn: ["WITHDRAWN", "REMOVED"] } },
         orderBy: [{ status: "asc" }, { waitlistPosition: "asc" }, { createdAt: "asc" }],
-        include: { player: { select: { id: true, displayName: true, streamUrl: true } } },
+        include: {
+          player: {
+            select: { id: true, displayName: true, streamUrl: true, avatarUpdatedAt: true },
+          },
+        },
       },
       rounds: {
         orderBy: { roundNumber: "asc" },
@@ -273,6 +282,7 @@ export async function saveTemplateFromEvent(actor: Actor, eventId: string, name:
   const event = await loadOwnedEvent(actor, eventId);
   const settings = eventTemplateSettingsSchema.parse({
     mode: event.mode,
+    game: event.game,
     format: event.format,
     teamSize: event.teamSize,
     roundCount: event.roundCount,
@@ -285,6 +295,7 @@ export async function saveTemplateFromEvent(actor: Actor, eventId: string, name:
     rules: event.rules,
     entryType: event.entryType,
     entryRequirements: event.entryRequirements,
+    randomization: event.randomization,
     description: event.description,
   });
   return prisma.eventTemplate.upsert({

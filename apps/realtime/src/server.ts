@@ -56,6 +56,7 @@ export function createRealtimeServer(opts: RealtimeOptions): RealtimeServer {
       if (typeof eventId === "string" && ID_RE.test(eventId))
         void socket.join(rooms.event(eventId));
     });
+    socket.on("join.leaderboards", () => void socket.join(rooms.leaderboards()));
     socket.on("join.overlay", async (key) => {
       if (typeof key !== "string" || !ID_RE.test(key)) return;
       if (opts.overlayKeyExists && !(await opts.overlayKeyExists(key))) return;
@@ -70,6 +71,8 @@ export function createRealtimeServer(opts: RealtimeOptions): RealtimeServer {
     const env = parseEnvelope(raw);
     if (!env || !isRoom(env.room)) return;
     if (env.event === "event.updated") io.to(env.room).emit("event.updated", env.data);
+    else if (env.event === "leaderboard.updated")
+      io.to(env.room).emit("leaderboard.updated", env.data);
     else io.to(env.room).emit("overlay.state", env.data);
   });
 

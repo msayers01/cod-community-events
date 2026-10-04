@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { label, money } from "@/lib/format";
 import { LocalTime } from "./local-time";
+import { Countdown } from "./countdown";
+import { GameArt } from "./game-art";
 
 export interface EventCardData {
   slug: string;
   title: string;
   mode: string;
+  game: string | null;
   format: string;
   teamSize: number;
   region: string;
@@ -23,7 +26,12 @@ export interface EventCardData {
 export function EventCard({ e }: { e: EventCardData }) {
   const spotsLeft = e.playerCap - e.confirmedCount;
   return (
-    <Link href={`/events/${e.slug}`} className="card block hover:border-accent/60">
+    <Link href={`/events/${e.slug}`} className="card block overflow-hidden hover:border-accent/60">
+      {e.game && (
+        <div className="-mx-4 -mt-4 mb-3 sm:-mx-5 sm:-mt-5">
+          <GameArt game={e.game} className="h-36" />
+        </div>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold">{e.title}</h3>
@@ -34,6 +42,7 @@ export function EventCard({ e }: { e: EventCardData }) {
         <StatusTag status={e.status} />
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
+        {e.game && <span className="tag border-accent/60 text-accent">{label(e.game)}</span>}
         <span className="tag">{label(e.mode)}</span>
         <span className="tag">
           {e.teamSize}v{e.teamSize} {label(e.format)}
@@ -43,7 +52,12 @@ export function EventCard({ e }: { e: EventCardData }) {
         <span className="tag">{money(e.entryFeeCents, e.currency)}</span>
       </div>
       <div className="mt-3 flex items-center justify-between text-sm">
-        <LocalTime date={e.startsAt} />
+        <div>
+          <LocalTime date={e.startsAt} />
+          <div className="mt-0.5 text-xs">
+            <Countdown startsAt={e.startsAt} status={e.status} />
+          </div>
+        </div>
         <span className={spotsLeft > 0 ? "text-ok" : "text-muted"}>
           {e.confirmedCount}/{e.playerCap} paid ·{" "}
           {spotsLeft > 0 ? `${spotsLeft} spots left` : "Full (waitlist open)"}
@@ -56,11 +70,22 @@ export function EventCard({ e }: { e: EventCardData }) {
 export function StatusTag({ status }: { status: string }) {
   const color =
     status === "LIVE"
-      ? "border-warn text-warn"
-      : status === "CHECK_IN"
+      ? "border-ok text-ok"
+      : status === "PAUSED"
         ? "border-accent text-accent"
-        : status === "OPEN"
-          ? "border-ok text-ok"
-          : "";
-  return <span className={`tag ${color}`}>{label(status)}</span>;
+        : status === "CHECK_IN"
+          ? "border-accent text-accent"
+          : status === "OPEN"
+            ? "border-ok text-ok"
+            : status === "CANCELLED"
+              ? "border-warn text-warn line-through"
+              : "";
+  return (
+    <span className={`tag ${color}`}>
+      {status === "LIVE" && (
+        <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-ok align-middle" />
+      )}
+      {status === "LIVE" ? "Started · live" : label(status)}
+    </span>
+  );
 }

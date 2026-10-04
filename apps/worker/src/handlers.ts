@@ -1,6 +1,14 @@
 import { prisma } from "@cod/db";
-import type { DomainEvent } from "@cod/shared";
-import { recalculateReputation } from "@cod/core";
+import type { DomainEvent, StaffRole } from "@cod/shared";
+import {
+  detectThrowsForMatch,
+  recalculateReputation,
+  refreshForMatch,
+  refreshLeaderboard,
+  type Period,
+} from "@cod/core";
+import { hasPermission } from "@cod/shared";
+import { announceBoards } from "./jobs.js";
 
 /**
  * Reactions to domain events. Each handler must be idempotent: the outbox
@@ -502,4 +510,87 @@ async function promoteNextOnWaitlistNotice(e: DomainEvent) {
     "Pay the hoster to lock it in.",
     `/events/${next.event.slug}`,
   );
+}
+
+// ───────────── Phase 3 ─────────────
+
+/** Notify staff whose role carries a permission (a trial moderator has no business seeing throw flags). */
+async function notifyWithPermission(
+  permission: Parameters<typeof hasPermission>[1],
+  type: string,
+  title: string,
+  body: string,
+  href: string,
+) {
+  const staff = await prisma.staffRole.findMany({ select: { userId: true, role: true } });
+  for (const s of staff)
+    if (
+      hasPermission(
+        { userId: s.userId, staffRole: s.role as StaffRole, isHoster: false },
+        permission,
+      )
+    )
+      await notify(s.userId, type, title, body, href);
+}
+
+const phase3Handlers: Partial<Record<DomainEvent["type"], Handler[]>> = {
+  MatchVerified: [
+    // Throw detection: reads verified history and may raise flags for moderators. Never sanctions.
+    async (e) => {
+      if (e.type === "MatchVerified") await detectThrowsForMatch(e.matchId);
+    },
+    // Month and season boards refresh now; the all-time board follows on the schedule.
+    async (e) => {
+      if (e.type === "MatchVerified") await announceBoards(await refreshForMatch(e.matchId));
+    },
+  ],
+  ThrowFlagRaised: [
+    async (e) => {
+      if (e.type !== "ThrowFlagRaised") return;
+      // Deliberately vague: no player name, signal or numbers in a notification.
+      await notifyWithPermission(
+        "throwflag.review",
+        "throw_flag",
+        "A new throw-detection flag is waiting for review",
+        "Open the queue to see what was observed.",
+        "/staff/flags",
+      );
+    },
+  ],
+  LeaderboardRefreshRequested: [
+    async (e) => {
+      if (e.type !== "LeaderboardRefreshRequested") return;
+      await refreshLeaderboard(e.period as Period, e.periodKey);
+      await announceBoards([e]);
+    },
+  ],
+  ScreenshotRead: [
+    async (e) => {
+      if (e.type !== "ScreenshotRead") return;
+      const [reading, m] = await Promise.all([
+        prisma.screenshotReading.findUnique({ where: { submissionId: e.submissionId } }),
+        matchContext(e.matchId),
+      ]);
+      const sub = await prisma.resultSubmission.findUnique({ where: { id: e.submissionId } });
+      if (!reading || !m || !sub || sub.status !== "PENDING") return;
+      const discrepancies = Array.isArray(reading.discrepancies) ? reading.discrepancies.length : 0;
+      if (!reading.filledStats && discrepancies === 0) return;
+      const body = reading.filledStats
+        ? "The scoreboard was read automatically to fill in the stats. Check they match the screenshot before you confirm."
+        : "The scoreboard reading disagrees with some submitted stats. Compare them with the screenshot before you confirm.";
+      for (const member of [...m.teamA.members, ...m.teamB.members]) {
+        if (member.userId === sub.submittedById) continue;
+        await notify(
+          member.userId,
+          "screenshot_read",
+          `Check the stats for round ${m.round.roundNumber} of ${m.round.event.title}`,
+          body,
+          "/confirmations",
+        );
+      }
+    },
+  ],
+};
+for (const [type, hs] of Object.entries(phase3Handlers) as [DomainEvent["type"], Handler[]][]) {
+  handlers[type] = [...(handlers[type] ?? []), ...hs];
 }

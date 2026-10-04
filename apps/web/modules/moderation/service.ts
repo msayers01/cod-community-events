@@ -350,6 +350,7 @@ export async function staffUserView(actor: Actor, userId: string) {
     select: {
       id: true,
       displayName: true,
+      avatarUpdatedAt: true,
       activisionId: true,
       status: true,
       createdAt: true,

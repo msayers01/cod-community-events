@@ -3,9 +3,11 @@ import Link from "next/link";
 import { prisma } from "@cod/db";
 import { label } from "@/lib/format";
 import { LocalTime } from "@/components/local-time";
+import { Avatar } from "@/components/avatar";
 import { getCurrentUser } from "@/lib/session";
 import { hosterPayoutRecord, reputationFor, reviewsForHoster } from "@/modules/reputation/service";
 import { activeEntriesFor } from "@/modules/moderation/blacklist";
+import { standingsForUser } from "@/modules/leaderboards/service";
 
 export const dynamic = "force-dynamic";
 
@@ -40,12 +42,13 @@ export default async function ProfilePage({
   const played = user.registrations.filter(
     (r) => r.status !== "NO_SHOW" && ["COMPLETED", "ARCHIVED"].includes(r.event.status),
   ).length;
-  const [viewer, payoutRecord, rep, reviews, blacklist] = await Promise.all([
+  const [viewer, payoutRecord, rep, reviews, blacklist, standings] = await Promise.all([
     getCurrentUser(),
     user.hosterProfile ? hosterPayoutRecord(user.id) : null,
     reputationFor(user.id),
     user.hosterProfile ? reviewsForHoster(user.id) : [],
     activeEntriesFor(user.id),
+    standingsForUser(user.id),
   ]);
   const BADGE_LABEL: Record<string, string> = {
     FOUNDER: "Founder",
@@ -80,6 +83,7 @@ export default async function ProfilePage({
     <div className="mx-auto max-w-3xl space-y-6">
       <header className="card">
         <div className="flex flex-wrap items-center gap-3">
+          <Avatar user={user} size={72} />
           <h1 className="text-2xl font-semibold">{user.displayName}</h1>
           {badges.map((b) => (
             <span key={b} className="tag border-accent/60 text-accent">
@@ -132,6 +136,20 @@ export default async function ProfilePage({
           </div>
         </dl>
         {user.bio && <p className="mt-3 text-sm text-muted">{user.bio}</p>}
+        {standings.length > 0 && (
+          <p className="mt-3 text-xs text-muted">
+            This month:{" "}
+            {standings.map((st, i) => (
+              <span key={st.mode}>
+                {i > 0 && " · "}
+                <Link href={`/leaderboards?period=MONTH&mode=${st.mode}`} className="text-accent">
+                  #{st.rank} {label(st.mode)}
+                </Link>{" "}
+                ({st.points} pts)
+              </span>
+            ))}
+          </p>
+        )}
       </header>
 
       <section className="grid gap-4 sm:grid-cols-3">

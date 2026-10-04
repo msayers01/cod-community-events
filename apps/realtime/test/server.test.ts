@@ -114,4 +114,22 @@ describe("realtime server", () => {
     const res = await fetch(`${url}/healthz`);
     expect(res.status).toBe(200);
   });
+
+  it("relays leaderboard updates to sockets that joined the leaderboards room", async () => {
+    const watching = await client();
+    const elsewhere = await client();
+    watching.emit("join.leaderboards");
+    elsewhere.emit("join.event", "ev1");
+    await new Promise((r) => setTimeout(r, 100));
+    const data = { period: "MONTH", periodKey: "2026-10" };
+    const [got, notGot] = await Promise.all([
+      waitFor(watching, "leaderboard.updated"),
+      waitFor(elsewhere, "leaderboard.updated", 800),
+      publisher.publish({ room: rooms.leaderboards(), event: "leaderboard.updated", data }),
+    ]);
+    expect(got).toEqual(data);
+    expect(notGot).toBe("timeout");
+    watching.close();
+    elsewhere.close();
+  });
 });

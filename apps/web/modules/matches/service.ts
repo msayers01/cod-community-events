@@ -14,7 +14,7 @@ import {
 import { DomainError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { logStaffAction } from "@/modules/moderation/audit";
 import { publishEventUpdate } from "@/modules/realtime/publish";
-import { isVerifiedByConfirmations, verifySubmissionInTx } from "@cod/core";
+import { isVerifiedByConfirmations, queueScreenshotReading, verifySubmissionInTx } from "@cod/core";
 export { isVerifiedByConfirmations, expireSubmission } from "@cod/core";
 
 /** Hours players have to confirm or dispute before a submission auto-verifies or expires. */
@@ -148,6 +148,8 @@ export async function submitResult(actor: Actor, raw: unknown) {
     });
     matchMachine.assertTransition(match.status, "RESULT_PENDING");
     await tx.match.update({ where: { id: match.id }, data: { status: "RESULT_PENDING" } });
+    // The worker reads the scoreboard in the background; the result doesn't wait for it.
+    await queueScreenshotReading(tx, submission.id);
     await emit(tx, {
       type: "ResultSubmitted",
       matchId: match.id,
@@ -346,6 +348,42 @@ export async function resolveDispute(actor: Actor, raw: unknown) {
 
 // ───────────── Reads ─────────────
 
+/** Fields of a screenshot reading that are safe to show to players and reviewers (not the raw OCR text). */
+const readingSelect = {
+  status: true,
+  confidence: true,
+  filledStats: true,
+  discrepancies: true,
+} as const;
+
+export interface ReadingView {
+  status: string;
+  filledStats: boolean;
+  discrepancies: { player: string; field: string; submitted: number; read: number }[];
+}
+
+/** Turn a stored reading into display data, naming players. Null until a reading exists. */
+export function readingView(
+  reading: { status: string; filledStats: boolean; discrepancies: unknown } | null,
+  members: { user: { id: string; displayName: string } }[],
+): ReadingView | null {
+  if (!reading) return null;
+  const names = new Map(members.map((m) => [m.user.id, m.user.displayName]));
+  const raw = Array.isArray(reading.discrepancies) ? reading.discrepancies : [];
+  return {
+    status: reading.status,
+    filledStats: reading.filledStats,
+    discrepancies: (
+      raw as { playerId: string; field: string; submitted: number; read: number }[]
+    ).map((d) => ({
+      player: names.get(d.playerId) ?? "Unknown player",
+      field: d.field,
+      submitted: d.submitted,
+      read: d.read,
+    })),
+  };
+}
+
 /** Matches awaiting this player's confirmation. */
 export async function pendingConfirmationsFor(userId: string) {
   return prisma.resultSubmission.findMany({
@@ -362,11 +400,20 @@ export async function pendingConfirmationsFor(userId: string) {
     },
     include: {
       stats: { include: { player: { select: { displayName: true } } } },
+      reading: { select: readingSelect },
       submittedBy: { select: { displayName: true } },
       match: {
         include: {
-          teamA: { include: { members: { include: { user: { select: { displayName: true } } } } } },
-          teamB: { include: { members: { include: { user: { select: { displayName: true } } } } } },
+          teamA: {
+            include: {
+              members: { include: { user: { select: { id: true, displayName: true } } } },
+            },
+          },
+          teamB: {
+            include: {
+              members: { include: { user: { select: { id: true, displayName: true } } } },
+            },
+          },
           round: { include: { event: { select: { slug: true, title: true, mode: true } } } },
         },
       },
@@ -388,10 +435,19 @@ export async function reviewQueue(actor: Actor) {
       submittedBy: { select: { displayName: true } },
       confirmations: { include: { player: { select: { displayName: true } } } },
       stats: { include: { player: { select: { displayName: true } } } },
+      reading: { select: readingSelect },
       match: {
         include: {
-          teamA: { include: { members: { include: { user: { select: { displayName: true } } } } } },
-          teamB: { include: { members: { include: { user: { select: { displayName: true } } } } } },
+          teamA: {
+            include: {
+              members: { include: { user: { select: { id: true, displayName: true } } } },
+            },
+          },
+          teamB: {
+            include: {
+              members: { include: { user: { select: { id: true, displayName: true } } } },
+            },
+          },
           round: {
             include: { event: { select: { id: true, slug: true, title: true, hosterId: true } } },
           },

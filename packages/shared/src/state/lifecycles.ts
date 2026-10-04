@@ -7,6 +7,7 @@ import {
   ReportStatus,
   RoundStatus,
   SubmissionStatus,
+  ThrowFlagStatus,
 } from "../enums.js";
 import { createMachine } from "./machine.js";
 
@@ -85,4 +86,15 @@ export const appealMachine = createMachine<AppealStatus>("Appeal", {
   UNDER_REVIEW: ["UPHELD", "OVERTURNED"],
   UPHELD: [],
   OVERTURNED: [],
+});
+
+/**
+ * Throw flags are a review queue, not a verdict. Escalating files a report that
+ * goes through the normal report lifecycle; a flag never sanctions anyone.
+ */
+export const throwFlagMachine = createMachine<ThrowFlagStatus>("ThrowFlag", {
+  OPEN: ["UNDER_REVIEW", "DISMISSED"],
+  UNDER_REVIEW: ["DISMISSED", "ESCALATED"],
+  DISMISSED: [],
+  ESCALATED: [],
 });

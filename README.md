@@ -105,6 +105,55 @@ re-render on push; the overlay animates on push. Updates are best-effort; the da
 3. The secret is revealed. Anyone can recompute the commitment and the teams from the public spin
    log on the event page. `verifySpin()` in `@cod/shared` does exactly this.
 
+## Phase 3 features
+
+**Team formation modes.** Hosters choose per event: fully random (default), skill-balanced, or no repeat
+teammates. Every mode is still a commit-reveal spin: the mode's inputs (player ratings from verified
+stats, or how often each pair has already teamed up this event) are snapshotted into the pool that the
+commitment covers, and the teams are derived from the secret by `deriveResult()`, so `verifySpin()`
+checks all three modes the same way. The modes only rearrange a uniform random shuffle; they never let
+anyone pick who plays with whom. Fully random pools hash exactly as before.
+
+**Throw detection** (`packages/core/src/throw-detection`). After a match is verified the worker looks at
+the losing side for three things: a player far below their own baseline, an unusually long losing run
+in one event, and an unusually bad record with one specific teammate. Hits become `ThrowFlag` rows in a
+moderator-only queue (`/staff/flags`, moderators and above). A flag is a lead, not a verdict: nothing in
+the detection code can create a sanction, report or blacklist entry. Escalating a flag opens an ordinary
+THROWING report (with the verified scoreboard attached) that goes through the normal report process and
+the accused's right to respond. Flags are never shown to the player, never on a public page, and the
+thresholds live only in `thresholds.ts`, which is not exported from the package. Recusal applies.
+
+**Screenshot reading** (`packages/core/src/ocr`, `apps/worker`). Submitting a result queues a reading;
+the worker runs Tesseract on the screenshot. It first tries the whole frame (header row plus
+kills/deaths columns). Stylised in-game boards defeat that, so it then cuts out each team table and the
+player's stats card, cleans them up (enlarge, invert, threshold; `apps/worker/src/preprocess.ts`) and reads
+them by word position. The reading is advisory only: it flags fields that disagree with the typed stats,
+and when the submitter left stats blank it pre-fills what it can as unverified rows marked "read from
+screenshot" that confirmers can dispute. It never verifies a result. Uploaded screenshots are read from
+R2; pasted links are fetched only from `SCREENSHOT_URL_HOSTS`.
+
+What it reads today is measured on one real **Hardpoint** scoreboard (the two-table layout with
+`RANK PLAYER SCORE OBJ. SCORE TIME`): player names matched to participants, each player's time on the
+hill, and the submitter's own eliminations and deaths from the stats card, which is attributed to them by
+the `#id` in their name and cross-checked against the Elim/D ratio (a digit OCR drops can be rebuilt from
+it). That screenshot does not show kills or deaths for the other seven players, so those are never
+filled. Search & Destroy and other layouts have not been tested with real screenshots; unrecognised
+layouts simply get no reading. The engine sits behind the `OcrEngine` interface so Cloud Vision or
+Textract can replace Tesseract.
+
+**Leaderboards** (`/leaderboards`). Pre-calculated standings per game mode for each month, each admin-defined
+season (`/staff/seasons`) and all time. Only verified results count; a win is 3 points and a loss 1, and
+three verified matches are needed to be ranked. Suspended or banned players, and players on the verified
+reports list for cheating, throwing or falsified results, are left off. Boards are rewritten by the worker
+when a match is verified and on a 10-minute schedule.
+
+**Profile pictures** (`apps/web/modules/identity/avatars.ts`). Players upload a PNG, JPEG or WebP (5 MB max)
+from their account page. Every upload is decoded and re-encoded to a 256x256 WebP, which strips metadata
+such as EXIF location, crops to a square, and refuses decompression bombs and non-images. The result is
+stored in Postgres (no object storage needed) and served from `/api/avatars/<id>` with ETags and a
+versioned, long-cached URL. Without a picture a colored initials badge is shown; OAuth avatar URLs are
+deliberately not hotlinked. Staff with `content.remove` can take a picture down with a logged reason.
+
 ## Scripts
 
 | Command                                      | What it does                            |
@@ -116,12 +165,17 @@ re-render on push; the overlay animates on push. Updates are best-effort; the da
 | `pnpm db:seed`                               | Seed demo data                          |
 | `pnpm --filter @cod/db studio`               | Prisma Studio                           |
 
+End-to-end tests (`apps/web/e2e`, Playwright) drive the real app in a browser through the whole loop: create → publish →
+sign up → pay → check in → spin → result → confirm → complete → payout, plus cancellation, the live countdown, profile
+pictures and access control. Run `pnpm test:e2e` (needs the same migrated Postgres; it starts `next dev` itself because
+the test sign-in is disabled in production builds; first time: `pnpm --filter @cod/web exec playwright install chromium`).
+
 Web tests (`apps/web/test`) are integration tests and need `DATABASE_URL` to point at a migrated
 database. Shared package tests are pure unit tests.
 
 ## Status
 
-Phase 2 implemented, pending real-world testing. Phase 1 done: accounts and OAuth wiring, hoster registration, event creation and
+Phase 3 implemented, pending real-world testing. Phase 1 done: accounts and OAuth wiring, hoster registration, event creation and
 lifecycle, listings with filters, sign-ups with hoster-marked payment and automatic waitlist,
 Twitch join links and quick-add, check-in and no-show recording, commit-reveal wheel with public
 spin log and OBS overlay, Socket.IO real-time push for event pages, dashboard and overlay,
@@ -135,6 +189,10 @@ dispute flow, 24-hour verification window, hoster/staff dispute review, verified
 ratings, participant-only hoster reviews, reputation summaries with automatic hoster tiers and badges, public
 blacklist with right to respond, two-person approval, expiry and appeals, requirement-based and invite-only
 entry, X share links, Discord slash commands for channel subscriptions.
+
+Phase 3 done: throw detection (statistical flags for moderators, never automatic punishment), automatic
+scoreboard reading with Tesseract, monthly / seasonal / all-time leaderboards, and the optional
+skill-balanced and no-repeat-teammates team formation modes. See "Phase 3 features" below.
 
 Before launch: X account linking, OAuth apps and R2/Sentry credentials, legal review of blacklist wording
 (Phase 2), Playwright end-to-end tests of the sign-up → spin → payout flow.

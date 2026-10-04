@@ -5,3 +5,5 @@ export * from "./moderation.js";
 export * from "./matches.js";
 export * from "./reputation.js";
 export * from "./blacklist.js";
+export * from "./throwflags.js";
+export * from "./leaderboards.js";

@@ -175,3 +175,47 @@ export const AppealStatus = {
   OVERTURNED: "OVERTURNED",
 } as const;
 export type AppealStatus = (typeof AppealStatus)[keyof typeof AppealStatus];
+
+export const RandomizationMode = {
+  RANDOM: "RANDOM",
+  SKILL_BALANCED: "SKILL_BALANCED",
+  NO_REPEAT_TEAMMATES: "NO_REPEAT_TEAMMATES",
+} as const;
+export type RandomizationMode = (typeof RandomizationMode)[keyof typeof RandomizationMode];
+
+export const StatSource = { MANUAL: "MANUAL", OCR: "OCR" } as const;
+export type StatSource = (typeof StatSource)[keyof typeof StatSource];
+
+export const ReadingStatus = {
+  PENDING: "PENDING",
+  PROCESSING: "PROCESSING",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+  SKIPPED: "SKIPPED",
+} as const;
+export type ReadingStatus = (typeof ReadingStatus)[keyof typeof ReadingStatus];
+
+export const ThrowSignal = {
+  PERFORMANCE_DROP: "PERFORMANCE_DROP",
+  EVENT_LOSS_STREAK: "EVENT_LOSS_STREAK",
+  TEAMMATE_LOSS_PATTERN: "TEAMMATE_LOSS_PATTERN",
+} as const;
+export type ThrowSignal = (typeof ThrowSignal)[keyof typeof ThrowSignal];
+
+export const ThrowFlagStatus = {
+  OPEN: "OPEN",
+  UNDER_REVIEW: "UNDER_REVIEW",
+  DISMISSED: "DISMISSED",
+  ESCALATED: "ESCALATED",
+} as const;
+export type ThrowFlagStatus = (typeof ThrowFlagStatus)[keyof typeof ThrowFlagStatus];
+
+export const LeaderboardPeriod = {
+  MONTH: "MONTH",
+  SEASON: "SEASON",
+  ALL_TIME: "ALL_TIME",
+} as const;
+export type LeaderboardPeriod = (typeof LeaderboardPeriod)[keyof typeof LeaderboardPeriod];
+
+export const Game = { MW3: "MW3", BO6: "BO6", BO7: "BO7", MW4: "MW4" } as const;
+export type Game = (typeof Game)[keyof typeof Game];
