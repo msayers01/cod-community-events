@@ -2,7 +2,17 @@ import { loadRootEnv } from "@cod/db";
 loadRootEnv();
 import { initSentry } from "./sentry.js";
 initSentry("bot");
-import { Client, EmbedBuilder, GatewayIntentBits, type TextChannel } from "discord.js";
+import {
+  ChannelType,
+  Client,
+  EmbedBuilder,
+  GatewayIntentBits,
+  PermissionFlagsBits,
+  REST,
+  Routes,
+  SlashCommandBuilder,
+  type TextChannel,
+} from "discord.js";
 import { prisma } from "@cod/db";
 
 /**
@@ -20,8 +30,140 @@ if (!token) {
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
+/**
+ * Slash commands for community server admins:
+ *   /cod-events subscribe [mode] [region]   post new events to this channel
+ *   /cod-events unsubscribe                 stop posting here
+ *   /cod-events upcoming                    list the next open events
+ */
+const commands = [
+  new SlashCommandBuilder()
+    .setName("cod-events")
+    .setDescription("Community switcheroo listings")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+    .addSubcommand((sc) =>
+      sc
+        .setName("subscribe")
+        .setDescription("Post new events to this channel")
+        .addStringOption((o) =>
+          o
+            .setName("mode")
+            .setDescription("Only this mode")
+            .addChoices(
+              { name: "Search & Destroy", value: "SND" },
+              { name: "Hardpoint", value: "HARDPOINT" },
+            ),
+        )
+        .addStringOption((o) =>
+          o
+            .setName("region")
+            .setDescription("Only this region")
+            .addChoices(
+              { name: "NA East", value: "NA_EAST" },
+              { name: "NA West", value: "NA_WEST" },
+              { name: "EU", value: "EU" },
+              { name: "OCE", value: "OCE" },
+            ),
+        ),
+    )
+    .addSubcommand((sc) =>
+      sc.setName("unsubscribe").setDescription("Stop posting events to this channel"),
+    )
+    .addSubcommand((sc) => sc.setName("upcoming").setDescription("Show the next open events")),
+].map((c) => c.toJSON());
+
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand() || interaction.commandName !== "cod-events") return;
+  const sub = interaction.options.getSubcommand();
+  try {
+    if (sub === "subscribe") {
+      if (!interaction.guildId || interaction.channel?.type !== ChannelType.GuildText) {
+        await interaction.reply({
+          content: "Use this in a text channel of a server.",
+          ephemeral: true,
+        });
+        return;
+      }
+      const filters = {
+        mode: interaction.options.getString("mode") ?? undefined,
+        region: interaction.options.getString("region") ?? undefined,
+      };
+      // configuredById must reference a site user; the bot stores the Discord user id in filters instead.
+      const founder = await prisma.staffRole.findFirst({
+        where: { role: "FOUNDER" },
+        select: { userId: true },
+      });
+      if (!founder) {
+        await interaction.reply({ content: "The site is not set up yet.", ephemeral: true });
+        return;
+      }
+      await prisma.discordServerConfig.upsert({
+        where: {
+          guildId_channelId: { guildId: interaction.guildId, channelId: interaction.channelId },
+        },
+        update: { filters: { ...filters, configuredByDiscordId: interaction.user.id } },
+        create: {
+          guildId: interaction.guildId,
+          channelId: interaction.channelId,
+          filters: { ...filters, configuredByDiscordId: interaction.user.id },
+          configuredById: founder.userId,
+        },
+      });
+      await interaction.reply({
+        content: `Subscribed. New ${filters.mode ?? "SnD/HP"} events${filters.region ? ` in ${filters.region.replace("_", " ")}` : ""} will be posted here.`,
+        ephemeral: true,
+      });
+    } else if (sub === "unsubscribe") {
+      if (!interaction.guildId) return;
+      await prisma.discordServerConfig.deleteMany({
+        where: { guildId: interaction.guildId, channelId: interaction.channelId },
+      });
+      await interaction.reply({
+        content: "Unsubscribed. No more event posts here.",
+        ephemeral: true,
+      });
+    } else if (sub === "upcoming") {
+      const events = await prisma.event.findMany({
+        where: { status: { in: ["OPEN", "CHECK_IN"] }, startsAt: { gte: new Date() } },
+        orderBy: { startsAt: "asc" },
+        take: 5,
+        include: {
+          hoster: { include: { user: true } },
+          _count: {
+            select: {
+              registrations: { where: { status: { in: ["CONFIRMED", "CHECKED_IN", "IN_POOL"] } } },
+            },
+          },
+        },
+      });
+      if (events.length === 0) {
+        await interaction.reply({ content: "No open events right now.", ephemeral: true });
+        return;
+      }
+      const lines = events.map(
+        (e) =>
+          `• **${e.title}** by ${e.hoster.user.displayName} · ${e.teamSize}v${e.teamSize} ${e.mode} · <t:${Math.floor(e.startsAt.getTime() / 1000)}:R> · ${e._count.registrations}/${e.playerCap} paid · ${appUrl}/events/${e.slug}`,
+      );
+      await interaction.reply({ content: lines.join("\n"), ephemeral: true });
+    }
+  } catch (err) {
+    console.error("[bot] command failed", err);
+    if (!interaction.replied)
+      await interaction
+        .reply({ content: "Something went wrong.", ephemeral: true })
+        .catch(() => undefined);
+  }
+});
+
 client.once("clientReady", async () => {
   console.log(`[bot] logged in as ${client.user?.tag}`);
+  try {
+    const rest = new REST().setToken(token!);
+    await rest.put(Routes.applicationCommands(client.user!.id), { body: commands });
+    console.log("[bot] slash commands registered");
+  } catch (err) {
+    console.error("[bot] could not register commands", err);
+  }
   let since = new Date();
   setInterval(async () => {
     const rows = await prisma.outboxEvent.findMany({

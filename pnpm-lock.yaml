@@ -88,6 +88,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.900.0
         version: 3.1146.0
+      '@cod/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@cod/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -149,6 +152,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@cod/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@cod/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -177,6 +183,31 @@ importers:
       typescript:
         specifier: ^6.0.0
         version: 6.0.3
+      vitest:
+        specifier: ^4.0.0
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
+
+  packages/core:
+    dependencies:
+      '@cod/db':
+        specifier: workspace:*
+        version: link:../db
+      '@cod/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.19.1
+      eslint:
+        specifier: ^9.39.0
+        version: 9.39.5(jiti@2.7.0)
+      typescript:
+        specifier: ^6.0.0
+        version: 6.0.3
+      typescript-eslint:
+        specifier: ^8.46.0
+        version: 8.71.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3)
       vitest:
         specifier: ^4.0.0
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))

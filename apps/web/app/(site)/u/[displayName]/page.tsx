@@ -4,7 +4,8 @@ import { prisma } from "@cod/db";
 import { label } from "@/lib/format";
 import { LocalTime } from "@/components/local-time";
 import { getCurrentUser } from "@/lib/session";
-import { hosterPayoutRecord } from "@/modules/reputation/service";
+import { hosterPayoutRecord, reputationFor, reviewsForHoster } from "@/modules/reputation/service";
+import { activeEntriesFor } from "@/modules/moderation/blacklist";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function ProfilePage({
     where: { displayName },
     include: {
       staffRole: true,
+      badges: true,
       hosterProfile: {
         include: {
           _count: { select: { events: { where: { status: { in: ["COMPLETED", "ARCHIVED"] } } } } },
@@ -38,21 +40,41 @@ export default async function ProfilePage({
   const played = user.registrations.filter(
     (r) => r.status !== "NO_SHOW" && ["COMPLETED", "ARCHIVED"].includes(r.event.status),
   ).length;
-  const [viewer, payoutRecord] = await Promise.all([
+  const [viewer, payoutRecord, rep, reviews, blacklist] = await Promise.all([
     getCurrentUser(),
     user.hosterProfile ? hosterPayoutRecord(user.id) : null,
+    reputationFor(user.id),
+    user.hosterProfile ? reviewsForHoster(user.id) : [],
+    activeEntriesFor(user.id),
   ]);
-  const badges = [
-    user.staffRole && !user.staffRole.badgeHidden
-      ? user.staffRole.role === "FOUNDER"
-        ? "Founder"
-        : user.staffRole.role === "ADMIN"
-          ? "Admin"
-          : "Moderator"
-      : null,
-    user.hosterProfile ? label(user.hosterProfile.tier) : null,
-    user.hosterProfile?.foundingHoster ? "Founding Hoster" : null,
-  ].filter(Boolean) as string[];
+  const BADGE_LABEL: Record<string, string> = {
+    FOUNDER: "Founder",
+    ADMIN: "Admin",
+    MODERATOR: "Moderator",
+    NEW_HOSTER: "New Hoster",
+    VERIFIED_HOSTER: "Verified Hoster",
+    TRUSTED_HOSTER: "Trusted Hoster",
+    FOUNDING_HOSTER: "Founding Hoster",
+    VERIFIED_PLAYER: "Verified Player",
+    SUPPORTER: "Supporter",
+  };
+  const staffHidden = user.staffRole?.badgeHidden ?? false;
+  const badges =
+    user.badges.length > 0
+      ? user.badges
+          .filter((b) => !(staffHidden && ["FOUNDER", "ADMIN", "MODERATOR"].includes(b.badge)))
+          .map((b) => BADGE_LABEL[b.badge] ?? b.badge)
+      : ([
+          user.staffRole && !staffHidden
+            ? user.staffRole.role === "FOUNDER"
+              ? "Founder"
+              : user.staffRole.role === "ADMIN"
+                ? "Admin"
+                : "Moderator"
+            : null,
+          user.hosterProfile ? label(user.hosterProfile.tier) : null,
+          user.hosterProfile?.foundingHoster ? "Founding Hoster" : null,
+        ].filter(Boolean) as string[]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -124,6 +146,116 @@ export default async function ProfilePage({
           />
         )}
       </section>
+
+      {blacklist.length > 0 && (
+        <section className="card border-warn/60">
+          <h2 className="mb-2 font-semibold text-warn">Verified reports</h2>
+          <ul className="space-y-1 text-sm">
+            {blacklist.map((e) => (
+              <li key={e.id}>
+                {e.publicWording}
+                {e.expiresAt && (
+                  <span className="text-xs text-muted">
+                    {" "}
+                    · expires <LocalTime date={e.expiresAt} withZone={false} />
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-muted">Reviewed and approved by staff.</p>
+        </section>
+      )}
+
+      {rep && rep.verifiedMatches > 0 && (
+        <section className="card">
+          <h2 className="mb-2 font-semibold">Verified stats</h2>
+          <dl className="grid gap-3 text-sm sm:grid-cols-4">
+            <div>
+              <dt className="label">Matches</dt>
+              <dd className="text-xl font-semibold">
+                {rep.verifiedMatches}{" "}
+                <span className="text-xs text-muted">({rep.verifiedWins} W)</span>
+              </dd>
+            </div>
+            <div>
+              <dt className="label">K/D</dt>
+              <dd className="text-xl font-semibold">
+                {rep.deaths > 0 ? (rep.kills / rep.deaths).toFixed(2) : rep.kills}
+              </dd>
+            </div>
+            <div>
+              <dt className="label">Kills / match</dt>
+              <dd className="text-xl font-semibold">
+                {(rep.kills / rep.verifiedMatches).toFixed(1)}
+              </dd>
+            </div>
+            <div>
+              <dt className="label">Plants + defuses</dt>
+              <dd className="text-xl font-semibold">{rep.plants + rep.defuses}</dd>
+            </div>
+          </dl>
+          <p className="mt-2 text-xs text-muted">
+            Only results confirmed by players in the match count here.
+          </p>
+        </section>
+      )}
+
+      {rep && rep.ratingCount > 0 && (
+        <section className="card">
+          <h2 className="mb-2 font-semibold">Teammate rating</h2>
+          <dl className="grid gap-3 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="label">Would play again</dt>
+              <dd className="text-xl font-semibold">{rep.wouldPlayAgainPct?.toFixed(0)}%</dd>
+            </div>
+            <div>
+              <dt className="label">Communication</dt>
+              <dd className="text-xl font-semibold">{rep.communicationAvg?.toFixed(1)} / 5</dd>
+            </div>
+            <div>
+              <dt className="label">Effort</dt>
+              <dd className="text-xl font-semibold">{rep.effortAvg?.toFixed(1)} / 5</dd>
+            </div>
+          </dl>
+          <p className="mt-2 text-xs text-muted">From {rep.ratingCount} teammate ratings.</p>
+        </section>
+      )}
+
+      {user.hosterProfile && (
+        <section className="card">
+          <h2 className="mb-2 font-semibold">
+            Hoster reviews {rep?.reviewCount ? `(${rep.reviewCount})` : ""}
+          </h2>
+          {rep && rep.reviewCount > 0 && (
+            <p className="mb-3 text-sm text-muted">
+              Organization {rep.organizationAvg?.toFixed(1)} · Communication{" "}
+              {rep.hosterCommunicationAvg?.toFixed(1)} · Fairness {rep.fairnessAvg?.toFixed(1)} (out
+              of 5)
+            </p>
+          )}
+          {reviews.length === 0 ? (
+            <p className="text-sm text-muted">
+              No reviews yet. Only participants can review an event.
+            </p>
+          ) : (
+            <ul className="divide-y divide-line text-sm">
+              {reviews.map((r) => (
+                <li key={r.id} className="py-2">
+                  <p className="text-xs text-muted">
+                    {r.reviewer.displayName} ·{" "}
+                    <Link href={`/events/${r.event.slug}`} className="hover:text-accent">
+                      {r.event.title}
+                    </Link>{" "}
+                    · {r.organization}/{r.communication}/{r.fairness}
+                  </p>
+                  {r.comment && <p>{r.comment}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       <section className="card">
         <h2 className="mb-2 font-semibold">Recent events</h2>

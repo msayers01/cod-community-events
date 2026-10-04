@@ -3,7 +3,16 @@ import type { Prisma } from "@cod/db";
 export interface AuditInput {
   staffUserId: string;
   action: string;
-  targetType: "user" | "event" | "registration" | "report" | "spin";
+  targetType:
+    | "user"
+    | "event"
+    | "registration"
+    | "report"
+    | "spin"
+    | "match"
+    | "blacklist"
+    | "appeal"
+    | "review";
   targetId: string;
   reason: string;
   metadata?: Prisma.InputJsonValue;

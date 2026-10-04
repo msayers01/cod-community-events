@@ -4,6 +4,13 @@
  */
 import type * as S from "@cod/shared";
 import type {
+  AppealStatus,
+  AppealTarget,
+  BadgeKind,
+  BlacklistStatus,
+  ConfirmationResponse,
+  MatchStatus,
+  SubmissionStatus,
   AccountStatus,
   EntryType,
   EventFormat,
@@ -40,4 +47,11 @@ export type _checks = [
   Assert<Same<S.ReportCategory, ReportCategory>>,
   Assert<Same<S.ReportStatus, ReportStatus>>,
   Assert<Same<S.PayoutResponse, PayoutResponse>>,
+  Assert<Same<S.MatchStatus, MatchStatus>>,
+  Assert<Same<S.SubmissionStatus, SubmissionStatus>>,
+  Assert<Same<S.ConfirmationResponse, ConfirmationResponse>>,
+  Assert<Same<S.BadgeKind, BadgeKind>>,
+  Assert<Same<S.BlacklistStatus, BlacklistStatus>>,
+  Assert<Same<S.AppealTarget, AppealTarget>>,
+  Assert<Same<S.AppealStatus, AppealStatus>>,
 ];

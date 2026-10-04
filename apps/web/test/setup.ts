@@ -69,6 +69,10 @@ export async function cleanup() {
     select: { id: true },
   });
   const ids = users.map((u) => u.id);
+  await prisma.appeal.deleteMany({ where: { appellantId: { in: ids } } });
+  await prisma.blacklistEntry.deleteMany({
+    where: { OR: [{ userId: { in: ids } }, { proposedById: { in: ids } }] },
+  });
   await prisma.report.deleteMany({
     where: { OR: [{ reporterId: { in: ids } }, { reportedUserId: { in: ids } }] },
   });

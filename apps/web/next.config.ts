@@ -7,7 +7,7 @@ loadRootEnv();
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg", "pg"],
-  transpilePackages: ["@cod/shared", "@cod/db", "@cod/realtime"],
+  transpilePackages: ["@cod/shared", "@cod/db", "@cod/realtime", "@cod/core"],
 };
 
 // Sentry's build plugin (source maps) only activates when an auth token is present.

@@ -5,10 +5,12 @@ export function UserMenu({
   user,
   unread,
   pendingPayouts,
+  pendingConfirmations,
 }: {
   user: { displayName: string; isHoster: boolean; staff: boolean } | null;
   unread: number;
   pendingPayouts: number;
+  pendingConfirmations: number;
 }) {
   if (!user) {
     return (
@@ -22,6 +24,11 @@ export function UserMenu({
       {pendingPayouts > 0 && (
         <Link href="/payouts" className="tag border-accent text-accent hover:bg-accent/10">
           {pendingPayouts} payout{pendingPayouts === 1 ? "" : "s"} to confirm
+        </Link>
+      )}
+      {pendingConfirmations > 0 && (
+        <Link href="/confirmations" className="tag border-warn text-warn hover:bg-warn/10">
+          {pendingConfirmations} result{pendingConfirmations === 1 ? "" : "s"} to confirm
         </Link>
       )}
       <Link

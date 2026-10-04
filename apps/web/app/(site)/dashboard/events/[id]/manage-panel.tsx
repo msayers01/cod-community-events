@@ -11,7 +11,10 @@ import {
   regenerateOverlayKeyAction,
   removePlayerAction,
   saveTemplateAction,
+  inviteAction,
 } from "@/app/(site)/dashboard/actions";
+import { createMatchesAction } from "@/app/(site)/confirmations/actions";
+import Link from "next/link";
 import type { ActionResult } from "@/lib/actions";
 import { FormMessage } from "@/components/form-message";
 import { label } from "@/lib/format";
@@ -35,6 +38,7 @@ interface Round {
   status: string;
   spin: { id: string; status: string; commitment: string; spunAt: Date | null } | null;
   teams: { label: string; members: string[] }[];
+  matchCount: number;
 }
 interface Props {
   event: {
@@ -50,6 +54,10 @@ interface Props {
     poolPlayers: { id: string; displayName: string }[];
     winners: { place: number; displayName: string; response: string }[];
     winnersRecorded: boolean;
+    slug: string;
+    entryType: string;
+    invites: { displayName: string; status: string }[];
+    openDisputes: number;
   };
   rounds: Round[];
   waitlist: Row[];
@@ -64,6 +72,7 @@ export function ManagePanel({ event, rounds, waitlist, paid, removed }: Props) {
   const [identifier, setIdentifier] = useState("");
   const [showRemoved, setShowRemoved] = useState(false);
   const [winnerPicks, setWinnerPicks] = useState<Record<number, string>>({});
+  const [inviteName, setInviteName] = useState("");
 
   const joinUrl = `${event.appUrl}/join/${event.joinCode}`;
   const overlayUrl = `${event.appUrl}/overlay/${event.overlayKey}`;
@@ -160,7 +169,21 @@ export function ManagePanel({ event, rounds, waitlist, paid, removed }: Props) {
         {["LIVE", "COMPLETED", "ARCHIVED"].includes(event.status) && (
           <section className="card">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-semibold">Wheel</h2>
+              <h2 className="font-semibold">
+                Wheel{" "}
+                <Link
+                  href={`/events/${event.slug}/matches`}
+                  className="ml-2 text-xs font-normal text-accent"
+                >
+                  matches & results
+                </Link>
+                <Link
+                  href={`/dashboard/events/${event.id}/disputes`}
+                  className={`ml-2 text-xs font-normal ${event.openDisputes ? "text-warn" : "text-muted"}`}
+                >
+                  {event.openDisputes ? `${event.openDisputes} to review` : "disputes"}
+                </Link>
+              </h2>
               <span className="text-sm text-muted">
                 {event.poolSize} in pool · {Math.floor(event.poolSize / event.teamSize)} teams
                 {event.roundCount ? ` · ${rounds.length}/${event.roundCount} rounds` : ""}
@@ -184,6 +207,16 @@ export function ManagePanel({ event, rounds, waitlist, paid, removed }: Props) {
                           Spin!
                         </button>
                       )}
+                      {(r.status === "SPUN" || r.status === "IN_PROGRESS") &&
+                        r.matchCount === 0 && (
+                          <button
+                            className="btn"
+                            disabled={pending}
+                            onClick={() => run(() => createMatchesAction(r.id, event.id))}
+                          >
+                            Create matches
+                          </button>
+                        )}
                       {(r.status === "SPUN" || r.status === "IN_PROGRESS") && (
                         <button
                           className="btn"
@@ -379,6 +412,39 @@ export function ManagePanel({ event, rounds, waitlist, paid, removed }: Props) {
                 Add as paid
               </button>
             </div>
+          </section>
+        )}
+
+        {event.entryType === "INVITE_ONLY" && (
+          <section className="card text-sm">
+            <h2 className="mb-2 font-semibold">Invites</h2>
+            <ul className="mb-2 space-y-1 text-xs">
+              {event.invites.length === 0 && <li className="text-muted">Nobody invited yet.</li>}
+              {event.invites.map((i) => (
+                <li key={i.displayName}>
+                  {i.displayName} <span className="text-muted">· {i.status.toLowerCase()}</span>
+                </li>
+              ))}
+            </ul>
+            <input
+              className="input"
+              placeholder="Display name or Activision ID"
+              value={inviteName}
+              onChange={(e) => setInviteName(e.target.value)}
+            />
+            <button
+              className="btn mt-2"
+              disabled={pending || !inviteName}
+              onClick={() =>
+                run(async () => {
+                  const r = await inviteAction(event.id, inviteName);
+                  if (r.ok) setInviteName("");
+                  return r;
+                })
+              }
+            >
+              Invite
+            </button>
           </section>
         )}
 

@@ -2,6 +2,7 @@ import { Queue, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { prisma, emit } from "@cod/db";
 import { createPublisher, rooms, type Publisher } from "@cod/realtime";
+import { expireBlacklistEntries, sweepVerificationWindows } from "@cod/core";
 
 let publisher: Publisher | null = null;
 const rt = () => (publisher ??= createPublisher());
@@ -11,7 +12,9 @@ export const QUEUE = "cod-timers";
 export type TimerJob =
   | { kind: "open-check-in"; eventId: string }
   | { kind: "sweep-check-in" }
-  | { kind: "sweep-payout-reminders" };
+  | { kind: "sweep-payout-reminders" }
+  | { kind: "sweep-verification-windows" }
+  | { kind: "sweep-blacklist-expiry" };
 
 export function redis() {
   return new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
@@ -45,6 +48,14 @@ export async function handleTimer(job: Job<TimerJob>) {
       });
       await publishStatus(e.id);
     }
+    return;
+  }
+  if (data.kind === "sweep-verification-windows") {
+    await sweepVerificationWindows();
+    return;
+  }
+  if (data.kind === "sweep-blacklist-expiry") {
+    await expireBlacklistEntries();
     return;
   }
   if (data.kind === "sweep-payout-reminders") {

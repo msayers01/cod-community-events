@@ -14,6 +14,15 @@ export default async function StaffLayout({ children }: { children: React.ReactN
         <Link href="/staff" className="text-muted hover:text-ink">
           Report queue
         </Link>
+        <Link href="/staff/disputes" className="text-muted hover:text-ink">
+          Disputes
+        </Link>
+        <Link href="/staff/blacklist" className="text-muted hover:text-ink">
+          Blacklist
+        </Link>
+        <Link href="/staff/appeals" className="text-muted hover:text-ink">
+          Appeals
+        </Link>
         <Link href="/staff/log" className="text-muted hover:text-ink">
           Action log
         </Link>

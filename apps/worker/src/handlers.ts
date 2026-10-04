@@ -1,5 +1,6 @@
 import { prisma } from "@cod/db";
 import type { DomainEvent } from "@cod/shared";
+import { recalculateReputation } from "@cod/core";
 
 /**
  * Reactions to domain events. Each handler must be idempotent: the outbox
@@ -251,6 +252,235 @@ const moreHandlers: Partial<Record<DomainEvent["type"], Handler[]>> = {
   ],
 };
 Object.assign(handlers, moreHandlers);
+
+// ───────────── Phase 2 ─────────────
+
+async function matchContext(matchId: string) {
+  return prisma.match.findUnique({
+    where: { id: matchId },
+    include: {
+      teamA: { include: { members: true } },
+      teamB: { include: { members: true } },
+      round: {
+        include: { event: { select: { id: true, slug: true, title: true, hosterId: true } } },
+      },
+    },
+  });
+}
+
+/** Ask the worker (via outbox) to recalculate reputation for a set of users. */
+async function recalcLater(userIds: Iterable<string>) {
+  for (const userId of new Set(userIds))
+    await prisma.outboxEvent.create({ data: { type: "ReputationChanged", payload: { userId } } });
+}
+
+const phase2Handlers: Partial<Record<DomainEvent["type"], Handler[]>> = {
+  ResultSubmitted: [
+    async (e) => {
+      if (e.type !== "ResultSubmitted") return;
+      const m = await matchContext(e.matchId);
+      const sub = await prisma.resultSubmission.findUnique({ where: { id: e.submissionId } });
+      if (!m || !sub) return;
+      for (const member of [...m.teamA.members, ...m.teamB.members]) {
+        if (member.userId === sub.submittedById) continue;
+        await notify(
+          member.userId,
+          "confirm_result",
+          `Confirm the result for round ${m.round.roundNumber} of ${m.round.event.title}`,
+          "One tap to confirm, or dispute with a reason. The window closes in 24 hours.",
+          "/confirmations",
+        );
+      }
+    },
+  ],
+  ResultDisputed: [
+    async (e) => {
+      if (e.type !== "ResultDisputed") return;
+      const m = await matchContext(e.matchId);
+      if (!m) return;
+      await notify(
+        m.round.event.hosterId,
+        "dispute",
+        `A result in ${m.round.event.title} was disputed`,
+        `Round ${m.round.roundNumber}. Review it from your dashboard after the stream.`,
+        `/dashboard/events/${m.round.event.id}/disputes`,
+      );
+    },
+  ],
+  MatchVerified: [
+    async (e) => {
+      if (e.type !== "MatchVerified") return;
+      const m = await matchContext(e.matchId);
+      if (!m) return;
+      const members = [...m.teamA.members, ...m.teamB.members].map((x) => x.userId);
+      for (const userId of members) {
+        await notify(
+          userId,
+          "match_verified",
+          `Result verified: round ${m.round.roundNumber} of ${m.round.event.title}`,
+          "Your stats now count. Rate your teammates while it's fresh.",
+          "/ratings",
+        );
+      }
+      await recalcLater(members);
+    },
+  ],
+  MatchRejected: [
+    async (e) => {
+      if (e.type !== "MatchRejected") return;
+      const m = await matchContext(e.matchId);
+      if (!m) return;
+      for (const member of [...m.teamA.members, ...m.teamB.members]) {
+        await notify(
+          member.userId,
+          "match_rejected",
+          `Result rejected: round ${m.round.roundNumber} of ${m.round.event.title}`,
+          "The submitted result was rejected after review. A fresh result can be submitted.",
+          `/events/${m.round.event.slug}`,
+        );
+      }
+    },
+  ],
+  TeammateRated: [
+    async (e) => {
+      if (e.type === "TeammateRated") await recalcLater([e.ratedId]);
+    },
+  ],
+  HosterReviewed: [
+    async (e) => {
+      if (e.type === "HosterReviewed") await recalcLater([e.hosterId]);
+    },
+  ],
+  PayoutConfirmed: [
+    async (e) => {
+      if (e.type === "PayoutConfirmed")
+        await recalcLater([
+          (
+            await prisma.event.findUniqueOrThrow({
+              where: { id: e.eventId },
+              select: { hosterId: true },
+            })
+          ).hosterId,
+        ]);
+    },
+  ],
+  PayoutDenied: [
+    async (e) => {
+      if (e.type === "PayoutDenied")
+        await recalcLater([
+          (
+            await prisma.event.findUniqueOrThrow({
+              where: { id: e.eventId },
+              select: { hosterId: true },
+            })
+          ).hosterId,
+        ]);
+    },
+  ],
+  EventCompleted: [
+    async (e) => {
+      if (e.type !== "EventCompleted") return;
+      const event = await prisma.event.findUnique({
+        where: { id: e.eventId },
+        select: {
+          title: true,
+          slug: true,
+          hosterId: true,
+          registrations: { where: { status: "IN_POOL" }, select: { playerId: true } },
+        },
+      });
+      if (!event) return;
+      for (const r of event.registrations) {
+        await notify(
+          r.playerId,
+          "review_hoster",
+          `How was ${event.title}?`,
+          "Rate the hoster's organization, communication and fairness. Only participants can review.",
+          `/events/${event.slug}/review`,
+        );
+      }
+      await recalcLater([event.hosterId, ...event.registrations.map((r) => r.playerId)]);
+    },
+  ],
+  CheckInClosed: [
+    async (e) => {
+      if (e.type !== "CheckInClosed") return;
+      const noShows = await prisma.registration.findMany({
+        where: { eventId: e.eventId, status: "NO_SHOW" },
+        select: { playerId: true },
+      });
+      await recalcLater(noShows.map((r) => r.playerId));
+    },
+  ],
+  SanctionIssued: [
+    async (e) => {
+      if (e.type === "SanctionIssued") await recalcLater([e.userId]);
+    },
+  ],
+  BlacklistEntryProposed: [
+    async (e) => {
+      if (e.type !== "BlacklistEntryProposed") return;
+      await notifyStaff(
+        "blacklist_proposed",
+        "Blacklist entry awaiting approval",
+        "A second moderator must review and approve.",
+        "/staff/blacklist",
+      );
+    },
+  ],
+  BlacklistEntryActivated: [
+    async (e) => {
+      if (e.type !== "BlacklistEntryActivated") return;
+      await notify(
+        e.userId,
+        "blacklisted",
+        "A verified report about you is now public",
+        "You can appeal this decision from your account.",
+        "/account/appeals",
+      );
+      await recalcLater([e.userId]);
+    },
+  ],
+  BlacklistEntryRemoved: [
+    async (e) => {
+      if (e.type === "BlacklistEntryRemoved") await recalcLater([e.userId]);
+    },
+  ],
+  AppealFiled: [
+    async (e) => {
+      if (e.type !== "AppealFiled") return;
+      await notifyStaff(
+        "appeal_filed",
+        "New appeal",
+        "Must be handled by a moderator not involved in the original decision.",
+        "/staff/appeals",
+      );
+    },
+  ],
+  AppealDecided: [
+    async (e) => {
+      if (e.type !== "AppealDecided") return;
+      await notify(
+        e.appellantId,
+        "appeal_decided",
+        `Your appeal was ${e.status === "OVERTURNED" ? "upheld: the decision was overturned" : "denied"}`,
+        "",
+        "/account/appeals",
+      );
+      await recalcLater([e.appellantId]);
+    },
+  ],
+  ReputationChanged: [
+    async (e) => {
+      if (e.type !== "ReputationChanged") return;
+      await recalculateReputation(e.userId);
+    },
+  ],
+};
+// Merge: Phase 2 handlers run after Phase 1 handlers for the same event type.
+for (const [type, hs] of Object.entries(phase2Handlers) as [DomainEvent["type"], Handler[]][]) {
+  handlers[type] = [...(handlers[type] ?? []), ...hs];
+}
 
 async function promoteNextOnWaitlistNotice(e: DomainEvent) {
   if (e.type !== "RegistrationWithdrawn" && e.type !== "RegistrationRemoved") return;

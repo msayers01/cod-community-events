@@ -115,3 +115,63 @@ export const PayoutResponse = {
   NO_RESPONSE: "NO_RESPONSE",
 } as const;
 export type PayoutResponse = (typeof PayoutResponse)[keyof typeof PayoutResponse];
+
+export const MatchStatus = {
+  SCHEDULED: "SCHEDULED",
+  RESULT_PENDING: "RESULT_PENDING",
+  VERIFIED: "VERIFIED",
+  DISPUTED: "DISPUTED",
+  UNDER_REVIEW: "UNDER_REVIEW",
+  REJECTED: "REJECTED",
+} as const;
+export type MatchStatus = (typeof MatchStatus)[keyof typeof MatchStatus];
+
+export const SubmissionStatus = {
+  PENDING: "PENDING",
+  VERIFIED: "VERIFIED",
+  DISPUTED: "DISPUTED",
+  UNCONFIRMED: "UNCONFIRMED",
+  UNDER_REVIEW: "UNDER_REVIEW",
+  REJECTED: "REJECTED",
+} as const;
+export type SubmissionStatus = (typeof SubmissionStatus)[keyof typeof SubmissionStatus];
+
+export const ConfirmationResponse = { CONFIRM: "CONFIRM", DISPUTE: "DISPUTE" } as const;
+export type ConfirmationResponse = (typeof ConfirmationResponse)[keyof typeof ConfirmationResponse];
+
+export const BadgeKind = {
+  FOUNDER: "FOUNDER",
+  ADMIN: "ADMIN",
+  MODERATOR: "MODERATOR",
+  NEW_HOSTER: "NEW_HOSTER",
+  VERIFIED_HOSTER: "VERIFIED_HOSTER",
+  TRUSTED_HOSTER: "TRUSTED_HOSTER",
+  FOUNDING_HOSTER: "FOUNDING_HOSTER",
+  VERIFIED_PLAYER: "VERIFIED_PLAYER",
+  SUPPORTER: "SUPPORTER",
+} as const;
+export type BadgeKind = (typeof BadgeKind)[keyof typeof BadgeKind];
+
+export const BlacklistStatus = {
+  PROPOSED: "PROPOSED",
+  AWAITING_SECOND_APPROVAL: "AWAITING_SECOND_APPROVAL",
+  ACTIVE: "ACTIVE",
+  EXPIRED: "EXPIRED",
+  REMOVED: "REMOVED",
+} as const;
+export type BlacklistStatus = (typeof BlacklistStatus)[keyof typeof BlacklistStatus];
+
+export const AppealTarget = {
+  BLACKLIST_ENTRY: "BLACKLIST_ENTRY",
+  SANCTION: "SANCTION",
+  DISPUTE_RULING: "DISPUTE_RULING",
+} as const;
+export type AppealTarget = (typeof AppealTarget)[keyof typeof AppealTarget];
+
+export const AppealStatus = {
+  SUBMITTED: "SUBMITTED",
+  UNDER_REVIEW: "UNDER_REVIEW",
+  UPHELD: "UPHELD",
+  OVERTURNED: "OVERTURNED",
+} as const;
+export type AppealStatus = (typeof AppealStatus)[keyof typeof AppealStatus];

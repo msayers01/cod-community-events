@@ -24,7 +24,10 @@ export type Permission =
   | "blacklist.approve"
   | "hoster.verify"
   | "staff.manage"
-  | "content.remove";
+  | "content.remove"
+  | "dispute.resolve" // staff-level dispute review (hosters resolve their own via event ownership)
+  | "appeal.decide"
+  | "appeal.final"; // final rulings
 
 const STAFF_RANK: Record<StaffRole, number> = {
   TRIAL_MODERATOR: 1,
@@ -47,6 +50,9 @@ const MIN_RANK: Record<Permission, number | "hoster" | "any"> = {
   "hoster.verify": STAFF_RANK.MODERATOR,
   "ban.permanent": STAFF_RANK.ADMIN,
   "staff.manage": STAFF_RANK.ADMIN,
+  "dispute.resolve": STAFF_RANK.TRIAL_MODERATOR,
+  "appeal.decide": STAFF_RANK.MODERATOR,
+  "appeal.final": STAFF_RANK.ADMIN,
 };
 
 /** Which sanction types each permission level may issue. */
@@ -122,8 +128,52 @@ export function canHandleAppeal(
   c: CaseInvolvement,
 ): boolean {
   return (
-    hasPermission(actor, "report.review") &&
+    hasPermission(actor, "appeal.decide") &&
     !originalDecisionStaffIds.includes(actor.userId) &&
     recusalReason(actor, c) === null
+  );
+}
+
+/**
+ * Hoster tier is automatic unless staff set it manually.
+ * Verified: 5+ completed events with no denied payouts and >=80% confirmations answered paid.
+ * Trusted: 25+ completed events, no denied payouts, >=90% paid confirmations, 90+ days hosting.
+ */
+export function computeHosterTier(input: {
+  completedEvents: number;
+  confirmedPayouts: number;
+  deniedPayouts: number;
+  firstEventAt: Date | null;
+  now?: Date;
+}): "NEW" | "VERIFIED" | "TRUSTED" {
+  const now = input.now ?? new Date();
+  const asked = input.confirmedPayouts + input.deniedPayouts;
+  const paidRate = asked === 0 ? 0 : input.confirmedPayouts / asked;
+  const daysHosting = input.firstEventAt
+    ? (now.getTime() - input.firstEventAt.getTime()) / 86400_000
+    : 0;
+  if (
+    input.deniedPayouts === 0 &&
+    input.completedEvents >= 25 &&
+    paidRate >= 0.9 &&
+    daysHosting >= 90
+  )
+    return "TRUSTED";
+  if (input.deniedPayouts === 0 && input.completedEvents >= 5 && paidRate >= 0.8) return "VERIFIED";
+  return "NEW";
+}
+
+/** Verified Player: linked account, 10+ completed events, no sanctions, no active blacklist. */
+export function qualifiesVerifiedPlayer(input: {
+  linkedAccounts: number;
+  eventsPlayed: number;
+  sanctions: number;
+  activeBlacklist: boolean;
+}): boolean {
+  return (
+    input.linkedAccounts >= 1 &&
+    input.eventsPlayed >= 10 &&
+    input.sanctions === 0 &&
+    !input.activeBlacklist
   );
 }

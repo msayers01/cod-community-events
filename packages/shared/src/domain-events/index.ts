@@ -22,6 +22,18 @@ export type DomainEvent =
   | { type: "ReportFiled"; reportId: string; reportedUserId: string }
   | { type: "ReportStatusChanged"; reportId: string; status: string }
   | { type: "SanctionIssued"; sanctionId: string; userId: string }
+  | { type: "ResultSubmitted"; matchId: string; submissionId: string; eventId: string }
+  | { type: "ResultDisputed"; matchId: string; submissionId: string; eventId: string }
+  | { type: "MatchVerified"; matchId: string; submissionId: string; eventId: string }
+  | { type: "MatchRejected"; matchId: string; submissionId: string; eventId: string }
+  | { type: "TeammateRated"; matchId: string; ratedId: string }
+  | { type: "HosterReviewed"; eventId: string; hosterId: string }
+  | { type: "BlacklistEntryProposed"; entryId: string; userId: string }
+  | { type: "BlacklistEntryActivated"; entryId: string; userId: string }
+  | { type: "BlacklistEntryRemoved"; entryId: string; userId: string }
+  | { type: "AppealFiled"; appealId: string; appellantId: string }
+  | { type: "AppealDecided"; appealId: string; appellantId: string; status: string }
+  | { type: "ReputationChanged"; userId: string }
   | { type: "StaffActionLogged"; logId: string };
 
 export type DomainEventType = DomainEvent["type"];
@@ -46,5 +58,17 @@ export const DOMAIN_EVENT_TYPES = [
   "ReportFiled",
   "ReportStatusChanged",
   "SanctionIssued",
+  "ResultSubmitted",
+  "ResultDisputed",
+  "MatchVerified",
+  "MatchRejected",
+  "TeammateRated",
+  "HosterReviewed",
+  "BlacklistEntryProposed",
+  "BlacklistEntryActivated",
+  "BlacklistEntryRemoved",
+  "AppealFiled",
+  "AppealDecided",
+  "ReputationChanged",
   "StaffActionLogged",
 ] as const satisfies readonly DomainEventType[];

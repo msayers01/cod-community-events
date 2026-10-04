@@ -9,6 +9,7 @@ import { StatusTag } from "@/components/event-card";
 import { SignupPanel } from "./signup-panel";
 import { SpinLog } from "./spin-log";
 import { LiveEvent } from "@/components/live-event";
+import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -120,6 +121,13 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           </ul>
         </section>
 
+        {event.rounds.length > 0 && (
+          <p className="text-sm">
+            <Link href={`/events/${event.slug}/matches`} className="text-accent">
+              Matches & results →
+            </Link>
+          </p>
+        )}
         <SpinLog rounds={event.rounds} />
       </div>
 
@@ -138,6 +146,47 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           cap={event.playerCap}
           waitlisted={waitlist.length}
         />
+
+        <section className="card text-sm">
+          <div className="flex flex-wrap gap-2">
+            <a
+              className="btn"
+              target="_blank"
+              rel="noreferrer"
+              href={`https://twitter.com/intent/tweet?${new URLSearchParams({
+                text: `${event.title} · ${event.teamSize}v${event.teamSize} ${label(event.mode)} ${label(event.format).toLowerCase()} hosted by ${event.hoster.user.displayName}. Sign up:`,
+                url: `${env.appUrl}/events/${event.slug}`,
+              }).toString()}`}
+            >
+              Share on X
+            </a>
+            {["COMPLETED", "ARCHIVED"].includes(event.status) && mine?.status === "IN_POOL" && (
+              <Link href={`/events/${event.slug}/review`} className="btn btn-primary">
+                Review the hoster
+              </Link>
+            )}
+          </div>
+          {event.entryType === "REQUIREMENT_BASED" && event.entryRequirements && (
+            <p className="mt-2 text-xs text-muted">
+              Entry requirements:{" "}
+              {(
+                event.entryRequirements as {
+                  minCompletedEvents?: number;
+                  noOpenReports?: boolean;
+                  requireLinkedDiscord?: boolean;
+                }
+              ).minCompletedEvents ?? 0}
+              + completed events
+              {(event.entryRequirements as { noOpenReports?: boolean }).noOpenReports
+                ? ", no open reports"
+                : ""}
+              {(event.entryRequirements as { requireLinkedDiscord?: boolean }).requireLinkedDiscord
+                ? ", linked Discord"
+                : ""}
+              .
+            </p>
+          )}
+        </section>
 
         <section className="card">
           <h2 className="mb-2 font-semibold">

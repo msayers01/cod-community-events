@@ -17,6 +17,7 @@ apps/worker     Outbox processor + BullMQ timers (check-in windows, notification
 apps/bot        discord.js bot: posts published events to configured channels
 packages/shared Enums, state machines, Zod schemas, policy checks, commit-reveal wheel
 packages/db     Prisma schema, migrations, client, outbox helper
+packages/core   Domain logic shared by web and worker (verification, reputation recalculation, expiry)
 packages/realtime Real-time protocol (rooms, payloads) and the Redis publisher
 ```
 
@@ -66,6 +67,28 @@ After completing an event the hoster records the winners. Each winner gets a pro
 they were paid. "Not paid" automatically opens a non-payment report. Confirmed and denied payouts appear on
 the hoster's profile.
 
+### Match results and verification
+
+After a spin the hoster creates the round's matches. Any player in a match, or the hoster, submits the result
+with a required scoreboard screenshot and optional per-player stats. Everyone else in the match gets a one-tap
+confirm / dispute prompt (`/confirmations`). A result verifies when no one disputes and at least one player from
+each side has confirmed (the submitter counts for their side). After 24 hours an unconfirmed result goes to
+review. Disputes go to the hoster first (`/dashboard/events/<id>/disputes`), to staff for escalations and
+anything involving the hoster (`/staff/disputes`). Only verified stats count toward profiles.
+
+### Reputation
+
+Teammates in a verified match can rate each other once (`/ratings`). Participants of a completed event can
+review the hoster once (`/events/<slug>/review`). The worker recalculates each user's reputation summary,
+hoster tier (New / Verified / Trusted, automatic unless staff override) and badges on every relevant event.
+
+### Blacklist and appeals
+
+Staff propose public entries from a report once the accused has had their response window. Two different,
+non-recused moderators must approve before an entry appears at `/blacklist`. Lesser categories expire. The
+subject can appeal from `/account/appeals`; appeals are handled by a moderator who was not involved, and
+overturning lifts the entry or sanction.
+
 ### Real-time
 
 Services publish an envelope to Redis after each committed change (`apps/web/modules/realtime/publish.ts`).
@@ -98,7 +121,7 @@ database. Shared package tests are pure unit tests.
 
 ## Status
 
-Phase 1 feature-complete pending real-world testing. Done: accounts and OAuth wiring, hoster registration, event creation and
+Phase 2 implemented, pending real-world testing. Phase 1 done: accounts and OAuth wiring, hoster registration, event creation and
 lifecycle, listings with filters, sign-ups with hoster-marked payment and automatic waitlist,
 Twitch join links and quick-add, check-in and no-show recording, commit-reveal wheel with public
 spin log and OBS overlay, Socket.IO real-time push for event pages, dashboard and overlay,
@@ -106,6 +129,12 @@ append-only staff action log enforced in the database, outbox worker with notifi
 bot posting published events, event templates, mod-reviewed report system with staff queue, sanctions,
 internal notes and action log, payout confirmation prompts with automatic non-payment reports, in-site
 notifications, Sentry (env-gated) and private R2 evidence uploads (env-gated).
+
+Phase 2 done: match creation per round, screenshot-based result submission with player confirmation and
+dispute flow, 24-hour verification window, hoster/staff dispute review, verified stat tracking, teammate
+ratings, participant-only hoster reviews, reputation summaries with automatic hoster tiers and badges, public
+blacklist with right to respond, two-person approval, expiry and appeals, requirement-based and invite-only
+entry, X share links, Discord slash commands for channel subscriptions.
 
 Before launch: X account linking, OAuth apps and R2/Sentry credentials, legal review of blacklist wording
 (Phase 2), Playwright end-to-end tests of the sign-up → spin → payout flow.
