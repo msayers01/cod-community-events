@@ -165,6 +165,11 @@ deliberately not hotlinked. Staff with `content.remove` can take a picture down 
 | `pnpm db:seed`                               | Seed demo data                          |
 | `pnpm --filter @cod/db studio`               | Prisma Studio                           |
 
+End-to-end tests (`apps/web/e2e`, Playwright) drive the real app in a browser through the whole loop: create → publish →
+sign up → pay → check in → spin → result → confirm → complete → payout, plus cancellation, the live countdown, profile
+pictures and access control. Run `pnpm test:e2e` (needs the same migrated Postgres; it starts `next dev` itself because
+the test sign-in is disabled in production builds; first time: `pnpm --filter @cod/web exec playwright install chromium`).
+
 Web tests (`apps/web/test`) are integration tests and need `DATABASE_URL` to point at a migrated
 database. Shared package tests are pure unit tests.
 

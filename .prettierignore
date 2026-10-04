@@ -4,3 +4,5 @@ dist
 .turbo
 pnpm-lock.yaml
 packages/db/generated
+playwright-report/
+test-results/

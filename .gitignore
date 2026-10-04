@@ -11,3 +11,6 @@ packages/db/generated/
 .DS_Store
 AGENTS.md
 *.traineddata
+
+playwright-report/
+test-results/

@@ -16,7 +16,8 @@
     "db:deploy": "pnpm --filter @cod/db migrate:deploy",
     "db:seed": "pnpm --filter @cod/db seed",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:e2e": "pnpm --filter @cod/web test:e2e"
   },
   "devDependencies": {
     "prettier": "^3.6.2",
