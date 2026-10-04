@@ -4,6 +4,10 @@ export function money(cents: number, currency = "USD"): string {
 }
 
 export const labels: Record<string, string> = {
+  MW3: "Modern Warfare III",
+  BO6: "Black Ops 6",
+  BO7: "Black Ops 7",
+  MW4: "Modern Warfare 4",
   SND: "Search & Destroy",
   HARDPOINT: "Hardpoint",
   SWITCHEROO: "Switcheroo",

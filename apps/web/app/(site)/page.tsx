@@ -1,4 +1,4 @@
-import { eventFilterSchema, GameMode, Region, Platform } from "@cod/shared";
+import { eventFilterSchema, Game, GameMode, Region, Platform } from "@cod/shared";
 import { listPublicEvents } from "@/modules/events/service";
 import { EventCard } from "@/components/event-card";
 import { label } from "@/lib/format";
@@ -27,7 +27,8 @@ export default async function HomePage({
         </p>
       </section>
 
-      <form className="card mb-6 grid grid-cols-2 gap-3 md:grid-cols-5" method="get">
+      <form className="card mb-6 grid grid-cols-2 gap-3 md:grid-cols-6" method="get">
+        <Select name="game" value={sp.game} options={Object.values(Game)} placeholder="Any game" />
         <Select
           name="mode"
           value={sp.mode}

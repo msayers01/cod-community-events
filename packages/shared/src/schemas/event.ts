@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { EntryType, EventFormat, GameMode, Platform, RandomizationMode, Region } from "../enums.js";
+import {
+  EntryType,
+  EventFormat,
+  Game,
+  GameMode,
+  Platform,
+  RandomizationMode,
+  Region,
+} from "../enums.js";
 
 const enumValues = <T extends Record<string, string>>(e: T) =>
   Object.values(e) as [T[keyof T], ...T[keyof T][]];
@@ -29,6 +37,7 @@ export const createEventSchema = z
     title: z.string().trim().min(3).max(120),
     description: z.string().trim().max(5000).default(""),
     mode: z.enum(enumValues(GameMode)),
+    game: z.enum(enumValues(Game)).nullable().default(null),
     format: z.enum(enumValues(EventFormat)),
     teamSize: z.number().int().min(1).max(6),
     roundCount: z.number().int().min(1).max(20).nullable().default(null),
@@ -80,6 +89,7 @@ export type CreateEventInput = z.infer<typeof createEventSchema>;
 
 export const eventFilterSchema = z.object({
   mode: z.enum(enumValues(GameMode)).optional(),
+  game: z.enum(enumValues(Game)).optional(),
   format: z.enum(enumValues(EventFormat)).optional(),
   region: z.enum(enumValues(Region)).optional(),
   platform: z.enum(enumValues(Platform)).optional(),
@@ -93,6 +103,7 @@ export type EventFilter = z.infer<typeof eventFilterSchema>;
 /** Reusable settings a hoster saves as a template: everything except title/description/times. */
 export const eventTemplateSettingsSchema = z.object({
   mode: z.enum(enumValues(GameMode)),
+  game: z.enum(enumValues(Game)).nullable().default(null),
   format: z.enum(enumValues(EventFormat)),
   teamSize: z.number().int().min(1).max(6),
   roundCount: z.number().int().min(1).max(20).nullable().default(null),

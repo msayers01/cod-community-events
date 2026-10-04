@@ -8,6 +8,7 @@ import { LocalTime } from "@/components/local-time";
 import { StatusTag } from "@/components/event-card";
 import { Countdown } from "@/components/countdown";
 import { StatusBanner } from "@/components/status-banner";
+import { GameArt } from "@/components/game-art";
 import { SignupPanel } from "./signup-panel";
 import { SpinLog } from "./spin-log";
 import { LiveEvent } from "@/components/live-event";
@@ -47,6 +48,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
+        <GameArt game={event.game} className="h-40 rounded border border-line sm:h-52" priority />
         <header>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold tracking-tight">{event.title}</h1>
@@ -65,6 +67,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             {event.hoster.foundingHoster && <span className="tag ml-2">Founding Hoster</span>}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
+            {event.game && (
+              <span className="tag border-accent/60 text-accent">{label(event.game)}</span>
+            )}
             <span className="tag">{label(event.mode)}</span>
             <span className="tag">
               {event.teamSize}v{event.teamSize} {label(event.format)}

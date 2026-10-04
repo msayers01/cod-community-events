@@ -3,6 +3,7 @@ import { useActionState, useState } from "react";
 import { useClientValue } from "@/lib/use-client-value";
 import {
   EntryType,
+  Game,
   GameMode,
   Platform,
   RandomizationMode,
@@ -91,6 +92,13 @@ export function NewEventForm({ template }: { template: EventTemplateSettings | n
           label="Payout split (%, 1st/2nd/...)"
           name="payoutSplit"
           defaultValue={t ? t.payoutSplit.map((p) => p.percent).join("/") : "70/30"}
+        />
+        <SelectField
+          label="Game"
+          name="game"
+          options={Object.values(Game)}
+          defaultValue={t?.game ?? undefined}
+          optional
         />
         <SelectField
           label="Region"
@@ -212,12 +220,15 @@ function SelectField({
   options,
   defaultValue,
   onChange,
+  optional,
 }: {
   label: string;
   name: string;
   options: string[];
   defaultValue?: string;
   onChange?: (v: string) => void;
+  /** Adds a leading "Not specified" choice that submits an empty value. */
+  optional?: boolean;
 }) {
   return (
     <div>
@@ -228,9 +239,10 @@ function SelectField({
         id={name}
         name={name}
         className="input"
-        defaultValue={defaultValue ?? options[0]}
+        defaultValue={defaultValue ?? (optional ? "" : options[0])}
         onChange={(e) => onChange?.(e.target.value)}
       >
+        {optional && <option value="">Not specified</option>}
         {options.map((o) => (
           <option key={o} value={o}>
             {label(o)}

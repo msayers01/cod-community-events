@@ -2,11 +2,13 @@ import Link from "next/link";
 import { label, money } from "@/lib/format";
 import { LocalTime } from "./local-time";
 import { Countdown } from "./countdown";
+import { GameArt } from "./game-art";
 
 export interface EventCardData {
   slug: string;
   title: string;
   mode: string;
+  game: string | null;
   format: string;
   teamSize: number;
   region: string;
@@ -24,7 +26,12 @@ export interface EventCardData {
 export function EventCard({ e }: { e: EventCardData }) {
   const spotsLeft = e.playerCap - e.confirmedCount;
   return (
-    <Link href={`/events/${e.slug}`} className="card block hover:border-accent/60">
+    <Link href={`/events/${e.slug}`} className="card block overflow-hidden hover:border-accent/60">
+      {e.game && (
+        <div className="-mx-4 -mt-4 mb-3 sm:-mx-5 sm:-mt-5">
+          <GameArt game={e.game} className="h-36" />
+        </div>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold">{e.title}</h3>
@@ -35,6 +42,7 @@ export function EventCard({ e }: { e: EventCardData }) {
         <StatusTag status={e.status} />
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
+        {e.game && <span className="tag border-accent/60 text-accent">{label(e.game)}</span>}
         <span className="tag">{label(e.mode)}</span>
         <span className="tag">
           {e.teamSize}v{e.teamSize} {label(e.format)}

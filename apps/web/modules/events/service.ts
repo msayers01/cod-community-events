@@ -172,6 +172,7 @@ export async function listPublicEvents(filter: EventFilter) {
   const where: Prisma.EventWhereInput = {
     status: { in: PUBLIC_STATUSES },
     ...(filter.mode && { mode: filter.mode }),
+    ...(filter.game && { game: filter.game }),
     ...(filter.format && { format: filter.format }),
     ...(filter.region && { region: filter.region }),
     ...(filter.platform && { platform: filter.platform }),
@@ -273,6 +274,7 @@ export async function saveTemplateFromEvent(actor: Actor, eventId: string, name:
   const event = await loadOwnedEvent(actor, eventId);
   const settings = eventTemplateSettingsSchema.parse({
     mode: event.mode,
+    game: event.game,
     format: event.format,
     teamSize: event.teamSize,
     roundCount: event.roundCount,

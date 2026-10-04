@@ -216,3 +216,6 @@ export const LeaderboardPeriod = {
   ALL_TIME: "ALL_TIME",
 } as const;
 export type LeaderboardPeriod = (typeof LeaderboardPeriod)[keyof typeof LeaderboardPeriod];
+
+export const Game = { MW3: "MW3", BO6: "BO6", BO7: "BO7", MW4: "MW4" } as const;
+export type Game = (typeof Game)[keyof typeof Game];

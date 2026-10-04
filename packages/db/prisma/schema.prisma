@@ -192,6 +192,14 @@ enum EntryType {
   INVITE_ONLY
 }
 
+/// Which Call of Duty title an event is played in. Null on events created before this existed.
+enum Game {
+  MW3
+  BO6
+  BO7
+  MW4
+}
+
 enum RandomizationMode {
   RANDOM
   SKILL_BALANCED
@@ -262,6 +270,7 @@ model Event {
   slug              String        @unique
   description       String        @default("")
   mode              GameMode
+  game              Game?
   format            EventFormat
   teamSize          Int
   roundCount        Int?
