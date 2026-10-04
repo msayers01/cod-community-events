@@ -10,6 +10,7 @@ import {
   type EventStatus,
 } from "@cod/shared";
 import { DomainError, ForbiddenError, NotFoundError } from "@/lib/errors";
+import { publishEventUpdate } from "@/modules/realtime/publish";
 import { newJoinCode, newOverlayKey, slugify } from "@/lib/ids";
 import { logStaffAction } from "@/modules/moderation/audit";
 
@@ -59,7 +60,7 @@ async function loadOwnedEvent(actor: Actor, eventId: string) {
 export async function publishEvent(actor: Actor, eventId: string) {
   const event = await loadOwnedEvent(actor, eventId);
   eventMachine.assertTransition(event.status, "OPEN");
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.event.update({
       where: { id: eventId },
       data: { status: "OPEN", publishedAt: new Date() },
@@ -67,16 +68,20 @@ export async function publishEvent(actor: Actor, eventId: string) {
     await emit(tx, { type: "EventPublished", eventId });
     return updated;
   });
+  await publishEventUpdate(eventId, "status");
+  return result;
 }
 
 export async function openCheckIn(actor: Actor, eventId: string) {
   const event = await loadOwnedEvent(actor, eventId);
   eventMachine.assertTransition(event.status, "CHECK_IN");
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.event.update({ where: { id: eventId }, data: { status: "CHECK_IN" } });
     await emit(tx, { type: "CheckInOpened", eventId });
     return updated;
   });
+  await publishEventUpdate(eventId, "status");
+  return result;
 }
 
 /**
@@ -86,7 +91,7 @@ export async function openCheckIn(actor: Actor, eventId: string) {
 export async function startEvent(actor: Actor, eventId: string) {
   const event = await loadOwnedEvent(actor, eventId);
   eventMachine.assertTransition(event.status, "LIVE");
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     await tx.registration.updateMany({
       where: { eventId, status: "CONFIRMED" },
       data: { status: "NO_SHOW" },
@@ -99,12 +104,14 @@ export async function startEvent(actor: Actor, eventId: string) {
     await emit(tx, { type: "CheckInClosed", eventId });
     return updated;
   });
+  await publishEventUpdate(eventId, "status");
+  return result;
 }
 
 export async function completeEvent(actor: Actor, eventId: string) {
   const event = await loadOwnedEvent(actor, eventId);
   eventMachine.assertTransition(event.status, "COMPLETED");
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.event.update({
       where: { id: eventId },
       data: { status: "COMPLETED", completedAt: new Date() },
@@ -112,12 +119,14 @@ export async function completeEvent(actor: Actor, eventId: string) {
     await emit(tx, { type: "EventCompleted", eventId });
     return updated;
   });
+  await publishEventUpdate(eventId, "status");
+  return result;
 }
 
 export async function cancelEvent(actor: Actor, eventId: string, reason: string) {
   const event = await loadOwnedEvent(actor, eventId);
   eventMachine.assertTransition(event.status, "CANCELLED");
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.event.update({
       where: { id: eventId },
       data: { status: "CANCELLED", cancelledAt: new Date(), cancelReason: reason },
@@ -125,6 +134,8 @@ export async function cancelEvent(actor: Actor, eventId: string, reason: string)
     await emit(tx, { type: "EventCancelled", eventId });
     return updated;
   });
+  await publishEventUpdate(eventId, "status");
+  return result;
 }
 
 /** Staff intervention: pause a live event. */
@@ -135,7 +146,7 @@ export async function pauseEvent(actor: Actor, eventId: string, reason: string) 
   if (event.hosterId === actor.userId)
     throw new ForbiddenError("You must recuse from your own event");
   eventMachine.assertTransition(event.status, "PAUSED");
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.event.update({ where: { id: eventId }, data: { status: "PAUSED" } });
     await logStaffAction(tx, {
       staffUserId: actor.userId,
@@ -146,6 +157,8 @@ export async function pauseEvent(actor: Actor, eventId: string, reason: string) 
     });
     return updated;
   });
+  await publishEventUpdate(eventId, "status");
+  return result;
 }
 
 export async function regenerateOverlayKey(actor: Actor, eventId: string) {

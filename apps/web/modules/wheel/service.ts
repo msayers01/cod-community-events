@@ -9,13 +9,14 @@ import {
   type SpinResult,
 } from "@cod/shared";
 import { DomainError, ForbiddenError, NotFoundError } from "@/lib/errors";
+import { publishEventUpdate } from "@/modules/realtime/publish";
 
 /**
  * Step 1: publish a commitment for the next round. The pool is snapshotted from
  * players currently IN_POOL. The secret is stored but not exposed until reveal.
  */
 export async function commitSpin(actor: Actor, eventId: string) {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const event = await tx.event.findUnique({
       where: { id: eventId },
       include: { rounds: { orderBy: { roundNumber: "desc" }, take: 1, include: { spin: true } } },
@@ -61,6 +62,8 @@ export async function commitSpin(actor: Actor, eventId: string) {
     await emit(tx, { type: "SpinCommitted", eventId, roundId: round.id, spinId: spin.id });
     return spin;
   });
+  await publishEventUpdate(result.eventId, "spin");
+  return result;
 }
 
 /**
@@ -68,7 +71,7 @@ export async function commitSpin(actor: Actor, eventId: string) {
  * committed secret, creates the round's teams, and reveals the secret.
  */
 export async function executeSpin(actor: Actor, spinId: string) {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const spin = await tx.spin.findUnique({
       where: { id: spinId },
       include: { event: true, round: true },
@@ -105,10 +108,12 @@ export async function executeSpin(actor: Actor, spinId: string) {
     await emit(tx, { type: "SpinCompleted", eventId: spin.eventId, roundId: spin.roundId, spinId });
     return updated;
   });
+  await publishEventUpdate(result.eventId, "spin");
+  return result;
 }
 
 export async function completeRound(actor: Actor, roundId: string) {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const round = await tx.round.findUnique({ where: { id: roundId }, include: { event: true } });
     if (!round) throw new NotFoundError("Round");
     if (!canManageEvent(actor, { hosterUserId: round.event.hosterId })) throw new ForbiddenError();
@@ -119,46 +124,8 @@ export async function completeRound(actor: Actor, roundId: string) {
     roundMachine.assertTransition("IN_PROGRESS", "COMPLETE");
     return tx.round.update({ where: { id: roundId }, data: { status: "COMPLETE" } });
   });
+  await publishEventUpdate(result.eventId, "spin");
+  return result;
 }
 
-/** Public overlay payload. Never includes an unrevealed secret. */
-export async function overlayState(overlayKey: string) {
-  const event = await prisma.event.findUnique({
-    where: { overlayKey },
-    select: {
-      id: true,
-      title: true,
-      status: true,
-      teamSize: true,
-      registrations: {
-        where: { status: "IN_POOL" },
-        select: { player: { select: { id: true, displayName: true } } },
-      },
-      rounds: { orderBy: { roundNumber: "desc" }, take: 1, include: { spin: true } },
-    },
-  });
-  if (!event) return null;
-  const names = new Map(event.registrations.map((r) => [r.player.id, r.player.displayName]));
-  const round = event.rounds[0] ?? null;
-  const spin = round?.spin ?? null;
-  const result = spin?.result as unknown as SpinResult | null;
-  return {
-    eventId: event.id,
-    title: event.title,
-    status: event.status,
-    teamSize: event.teamSize,
-    pool: [...names.values()].sort(),
-    round: round ? { number: round.roundNumber, status: round.status } : null,
-    spin: spin
-      ? {
-          id: spin.id,
-          status: spin.status,
-          commitment: spin.commitment,
-          poolHash: spin.poolHash,
-          revealedSecret: spin.revealedSecret,
-          spunAt: spin.spunAt,
-          teams: result?.teams.map((t) => t.map((id) => names.get(id) ?? id)) ?? null,
-        }
-      : null,
-  };
-}
+export { overlayState } from "./overlay-state";

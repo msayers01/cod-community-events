@@ -1,6 +1,10 @@
 import { Queue, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { prisma, emit } from "@cod/db";
+import { createPublisher, rooms, type Publisher } from "@cod/realtime";
+
+let publisher: Publisher | null = null;
+const rt = () => (publisher ??= createPublisher());
 
 export const QUEUE = "cod-timers";
 
@@ -36,6 +40,7 @@ export async function handleTimer(job: Job<TimerJob>) {
         await tx.event.update({ where: { id: e.id }, data: { status: "CHECK_IN" } });
         await emit(tx, { type: "CheckInOpened", eventId: e.id });
       });
+      await publishStatus(e.id);
     }
     return;
   }
@@ -43,4 +48,26 @@ export async function handleTimer(job: Job<TimerJob>) {
 
 export function startTimerWorker(connection: Redis) {
   return new Worker<TimerJob>(QUEUE, handleTimer, { connection });
+}
+
+/** Best-effort push of an event's new status and counts to anyone watching it. */
+async function publishStatus(eventId: string) {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { status: true, registrations: { select: { status: true } } },
+  });
+  if (!event) return;
+  const count = (...s: string[]) => event.registrations.filter((r) => s.includes(r.status)).length;
+  await rt().publish({
+    room: rooms.event(eventId),
+    event: "event.updated",
+    data: {
+      eventId,
+      status: event.status,
+      confirmedCount: count("CONFIRMED", "CHECKED_IN", "IN_POOL"),
+      waitlistCount: count("WAITLISTED"),
+      checkedInCount: count("CHECKED_IN", "IN_POOL"),
+      reason: "status",
+    },
+  });
 }

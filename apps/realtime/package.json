@@ -1,5 +1,5 @@
 {
-  "name": "@cod/worker",
+  "name": "@cod/realtime-server",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -9,17 +9,17 @@
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "echo skip",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
   },
   "dependencies": {
     "@cod/db": "workspace:*",
-    "@cod/shared": "workspace:*",
-    "bullmq": "^5.0.0",
+    "@cod/realtime": "workspace:*",
     "ioredis": "^5.9.0",
-    "@cod/realtime": "workspace:*"
+    "socket.io": "^4.8.4"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "socket.io-client": "^4.8.4",
     "tsx": "^4.21.0",
     "typescript": "^6.0.0",
     "vitest": "^4.0.0"

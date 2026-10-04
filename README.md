@@ -12,10 +12,12 @@ Planning documents live in [`docs/`](docs/): [planning](docs/01-planning.md), [a
 
 ```
 apps/web        Next.js app: public pages, dashboards, API, OBS overlay
+apps/realtime   Socket.IO server: relays Redis pub/sub to per-event and per-overlay rooms
 apps/worker     Outbox processor + BullMQ timers (check-in windows, notifications)
 apps/bot        discord.js bot: posts published events to configured channels
 packages/shared Enums, state machines, Zod schemas, policy checks, commit-reveal wheel
 packages/db     Prisma schema, migrations, client, outbox helper
+packages/realtime Real-time protocol (rooms, payloads) and the Redis publisher
 ```
 
 It is a modular monolith: one database, one codebase, several processes. Modules communicate
@@ -32,7 +34,7 @@ docker compose up -d            # postgres + redis
 pnpm db:generate
 pnpm db:migrate                 # applies migrations (prisma migrate dev)
 pnpm db:seed                    # demo hoster, players, one open event
-pnpm dev                        # web :3000, worker, bot (bot idles without a token)
+pnpm dev                        # web :3000, realtime :3001, worker, bot (bot idles without a token)
 ```
 
 Open http://localhost:3000. In development, `/sign-in` offers a **Development login** that signs
@@ -47,7 +49,15 @@ Create Discord and Twitch applications and set `DISCORD_CLIENT_ID/SECRET` and
 ### OBS overlay
 
 Each event has a private overlay URL (`/overlay/<key>`) shown on the hoster dashboard. Add it as a
-Browser Source. The overlay only displays what the server decided; it never picks teams.
+Browser Source. The overlay only displays what the server decided; it never picks teams. It receives
+state over Socket.IO from the real-time server and falls back to polling if that is unreachable.
+
+### Real-time
+
+Services publish an envelope to Redis after each committed change (`apps/web/modules/realtime/publish.ts`).
+Every `apps/realtime` instance subscribes and relays to Socket.IO rooms: `event:<id>` (public) and
+`overlay:<key>` (joinable only with the unguessable overlay key). Event pages and the hoster dashboard
+re-render on push; the overlay animates on push. Updates are best-effort; the database is the source of truth.
 
 ## How a spin is provably fair
 
@@ -77,8 +87,9 @@ database. Shared package tests are pure unit tests.
 Phase 1 in progress. Done: accounts and OAuth wiring, hoster registration, event creation and
 lifecycle, listings with filters, sign-ups with hoster-marked payment and automatic waitlist,
 Twitch join links and quick-add, check-in and no-show recording, commit-reveal wheel with public
-spin log and OBS overlay (polling), append-only staff action log enforced in the database, outbox
-worker with notifications, Discord bot posting published events.
+spin log and OBS overlay, Socket.IO real-time push for event pages, dashboard and overlay,
+append-only staff action log enforced in the database, outbox worker with notifications, Discord
+bot posting published events.
 
-Next up in Phase 1: Socket.IO push for the overlay and live counts, event templates, mod report
-queue UI, payout confirmation prompts, Sentry, file uploads for evidence (R2).
+Next up in Phase 1: event templates, mod report queue UI, payout confirmation prompts, Sentry,
+file uploads for evidence (R2).
