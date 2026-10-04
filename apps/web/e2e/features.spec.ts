@@ -116,7 +116,15 @@ test("a player uploads, replaces and removes a profile picture", async ({ browse
     mimeType: "image/png",
     buffer: photo,
   });
-  await expect(page.getByAltText("Preview of your new picture")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Preview of your new picture" })).toBeVisible();
+  // The preview really drew the chosen image (the test photo is green), not a blank canvas.
+  const [r, g, b] = await page
+    .getByRole("img", { name: "Preview of your new picture" })
+    .evaluate((c) =>
+      Array.from((c as HTMLCanvasElement).getContext("2d")!.getImageData(80, 80, 1, 1).data),
+    );
+  expect(g).toBeGreaterThan(r! + 50);
+  expect(g).toBeGreaterThan(b! + 30);
   await page.getByRole("button", { name: "Save picture" }).click();
   await expect(page.getByText("Profile picture updated")).toBeVisible();
 
