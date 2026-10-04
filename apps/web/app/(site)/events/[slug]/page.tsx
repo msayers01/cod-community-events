@@ -6,6 +6,8 @@ import { getCurrentUser } from "@/lib/session";
 import { label, money } from "@/lib/format";
 import { LocalTime } from "@/components/local-time";
 import { StatusTag } from "@/components/event-card";
+import { Countdown } from "@/components/countdown";
+import { StatusBanner } from "@/components/status-banner";
 import { SignupPanel } from "./signup-panel";
 import { SpinLog } from "./spin-log";
 import { LiveEvent } from "@/components/live-event";
@@ -77,10 +79,19 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           </div>
         </header>
 
+        <StatusBanner
+          status={event.status}
+          cancelReason={event.cancelReason}
+          cancelledAt={event.cancelledAt}
+        />
+
         <section className="card grid gap-4 sm:grid-cols-3">
           <div>
             <p className="label">Starts</p>
             <LocalTime date={event.startsAt} />
+            <div className="mt-1">
+              <Countdown startsAt={event.startsAt} status={event.status} />
+            </div>
           </div>
           <div>
             <p className="label">Check-in</p>

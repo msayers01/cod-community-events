@@ -7,6 +7,8 @@ import { env } from "@/lib/env";
 import { label } from "@/lib/format";
 import { StatusTag } from "@/components/event-card";
 import { LocalTime } from "@/components/local-time";
+import { Countdown } from "@/components/countdown";
+import { StatusBanner } from "@/components/status-banner";
 import { ManagePanel } from "./manage-panel";
 import { LiveEvent } from "@/components/live-event";
 
@@ -84,11 +86,20 @@ export default async function ManageEventPage({ params }: { params: Promise<{ id
             {label(event.format)} · {paid.filter((r) => r.status !== "NO_SHOW").length}/
             {event.playerCap} paid
           </p>
+          <div className="mt-1 text-sm">
+            <Countdown startsAt={event.startsAt} status={event.status} />
+          </div>
         </div>
         <Link href={`/events/${event.slug}`} className="btn">
           Public page
         </Link>
       </header>
+
+      <StatusBanner
+        status={event.status}
+        cancelReason={event.cancelReason}
+        cancelledAt={event.cancelledAt}
+      />
 
       <ManagePanel
         event={{
