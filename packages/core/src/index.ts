@@ -29,6 +29,7 @@ export {
   parseScoreboard,
   linesFromWords,
   panelIsConsistent,
+  stripBracketTags,
   panelOwner,
   parsePanel,
   parseRows,

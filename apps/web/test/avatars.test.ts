@@ -175,5 +175,10 @@ describe("fallback badge", () => {
     expect(initialsOf("[+ZTC+]Mc-Puffa")).toBe("MP");
     expect(initialsOf("Snaz")).toBe("SN");
     expect(initialsOf("[]")).toBe("?");
+    // Unbalanced brackets are kept, and hostile input can't make it slow.
+    expect(initialsOf("[oops Snaz")).toBe("OS");
+    const t = performance.now();
+    initialsOf("[".repeat(200_000));
+    expect(performance.now() - t).toBeLessThan(500);
   });
 });

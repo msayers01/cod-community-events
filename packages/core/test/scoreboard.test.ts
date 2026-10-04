@@ -3,6 +3,8 @@ import {
   compareToSubmitted,
   findHeader,
   matchRows,
+  normalizeName,
+  stripBracketTags,
   parseNumeric,
   parseScoreboard,
   planFill,
@@ -53,6 +55,23 @@ describe("scoreboard parsing", () => {
   it("keeps digits that belong to the name", () => {
     const { rows } = parseScoreboard("PLAYER KILLS DEATHS\nPlayer 7 12 3");
     expect(rows[0]).toEqual({ rawName: "Player 7", stats: { kills: 12, deaths: 3 } });
+  });
+});
+
+describe("clan tag stripping", () => {
+  it("removes [TAG] groups and keeps unmatched brackets", () => {
+    expect(stripBracketTags("[ABC] Viper")).toBe(" Viper");
+    expect(stripBracketTags("a[x]b[y]c")).toBe("abc");
+    expect(stripBracketTags("[a[b] c")).toBe(" c"); // same as the regex it replaced
+    expect(stripBracketTags("[[ no close")).toBe("[[ no close");
+    expect(stripBracketTags("")).toBe("");
+  });
+  it("stays linear on hostile input (many openers, no closer)", () => {
+    const hostile = "[".repeat(200_000) + "x";
+    const t = performance.now();
+    expect(stripBracketTags(hostile)).toBe(hostile);
+    expect(normalizeName(hostile + hostile).length).toBeGreaterThan(0);
+    expect(performance.now() - t).toBeLessThan(500);
   });
 });
 

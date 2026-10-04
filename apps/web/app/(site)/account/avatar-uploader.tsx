@@ -59,7 +59,7 @@ export function AvatarUploader({
 
   return (
     <section className="card mt-6 flex flex-wrap items-center gap-4 text-sm">
-      {preview ? (
+      {preview && preview.startsWith("blob:") ? (
         // eslint-disable-next-line @next/next/no-img-element -- local blob preview
         <img
           src={preview}

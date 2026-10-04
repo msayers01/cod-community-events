@@ -1,9 +1,19 @@
 /** Letters for the fallback: skips clan tags like [ABC] and punctuation. */
 export function initialsOf(displayName: string): string {
-  const words = displayName
-    .replace(/\[[^\]]*\]/g, " ")
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean);
+  // Clan tags like [ABC] are skipped. Scanned, not a regex: those backtrack badly on "[[[[…".
+  let withoutTags = "";
+  for (let i = 0; i < displayName.length;) {
+    if (displayName[i] === "[") {
+      const close = displayName.indexOf("]", i + 1);
+      if (close === -1) {
+        withoutTags += displayName.slice(i);
+        break;
+      }
+      withoutTags += " ";
+      i = close + 1;
+    } else withoutTags += displayName[i++];
+  }
+  const words = withoutTags.split(/[^A-Za-z0-9]+/).filter(Boolean);
   if (words.length === 0) return "?";
   return (words.length > 1 ? words[0]![0]! + words[1]![0]! : words[0]!.slice(0, 2)).toUpperCase();
 }

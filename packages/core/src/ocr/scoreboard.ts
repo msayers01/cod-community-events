@@ -316,9 +316,26 @@ export interface MatchedRow extends ScoreboardRow {
   similarity: number;
 }
 
+/**
+ * Remove "[TAG]" groups. Done with a scan instead of a regex: `/\[[^\]]*\]/g` is quadratic on
+ * input with many "[" and no "]", and this runs on OCR text.
+ */
+export function stripBracketTags(text: string): string {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] === "[") {
+      const close = text.indexOf("]", i + 1);
+      // No "]" anywhere after this point means no later "[" can close either: keep the rest.
+      if (close === -1) return out + text.slice(i);
+      i = close + 1;
+    } else out += text[i++];
+  }
+  return out;
+}
+
 export function normalizeName(name: string): string {
-  return name
-    .replace(/\[[^\]]*\]/g, "") // clan tags
+  return stripBracketTags(name) // clan tags
     .replace(/#\d+$/, "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
