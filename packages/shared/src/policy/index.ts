@@ -49,6 +49,20 @@ const MIN_RANK: Record<Permission, number | "hoster" | "any"> = {
   "staff.manage": STAFF_RANK.ADMIN,
 };
 
+/** Which sanction types each permission level may issue. */
+export function canIssueSanction(
+  actor: Actor,
+  type: "WARNING" | "SUSPENSION" | "PERMANENT_BAN",
+): boolean {
+  if (type === "WARNING") return hasPermission(actor, "warning.issue");
+  if (type === "SUSPENSION") return hasPermission(actor, "suspension.issue");
+  return hasPermission(actor, "ban.permanent");
+}
+
+export function isStaff(actor: Actor): boolean {
+  return actor.staffRole !== null;
+}
+
 export function staffRank(role: StaffRole | null): number {
   return role ? STAFF_RANK[role] : 0;
 }

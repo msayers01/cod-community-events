@@ -1,26 +1,14 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-
-interface State {
-  title: string;
-  status: string;
-  teamSize: number;
-  pool: string[];
-  round: { number: number; status: string } | null;
-  spin: {
-    id: string;
-    status: string;
-    commitment: string;
-    revealedSecret: string | null;
-    teams: string[][] | null;
-  } | null;
-}
+import type { OverlayState as State } from "@cod/realtime";
+import { getRealtimeSocket } from "@/lib/realtime-client";
 
 type Phase = "idle" | "spinning" | "result";
 
 /**
- * OBS overlay. Display only: it polls the server and animates to whatever the
- * server decided. Real-time push (Socket.IO) replaces polling in a later step.
+ * OBS overlay. Display only: it receives state pushed by the real-time server
+ * and animates to whatever the server decided. If the socket is unavailable it
+ * falls back to a slow poll so a stream never goes dark.
  */
 export function Wheel({ overlayKey }: { overlayKey: string }) {
   const [state, setState] = useState<State | null>(null);
@@ -66,11 +54,47 @@ export function Wheel({ overlayKey }: { overlayKey: string }) {
         /* retry next tick */
       }
     };
-    tick();
-    const id = setInterval(tick, 2000);
+    tick(); // initial state
+
+    const socket = getRealtimeSocket();
+    let poll: ReturnType<typeof setInterval> | null = null;
+    const startPoll = (ms: number) => {
+      if (!poll) poll = setInterval(tick, ms);
+    };
+    const stopPoll = () => {
+      if (poll) clearInterval(poll);
+      poll = null;
+    };
+
+    if (!socket) {
+      startPoll(2000);
+    } else {
+      const onConnect = () => {
+        stopPoll();
+        socket.emit("join.overlay", overlayKey);
+        tick();
+      };
+      const onDisconnect = () => startPoll(5000);
+      const onState = (next: State) => {
+        if (alive) applyState(next);
+      };
+      socket.on("connect", onConnect);
+      socket.on("disconnect", onDisconnect);
+      socket.on("overlay.state", onState);
+      if (socket.connected) onConnect();
+      else startPoll(5000);
+      return () => {
+        alive = false;
+        socket.off("connect", onConnect);
+        socket.off("disconnect", onDisconnect);
+        socket.off("overlay.state", onState);
+        stopPoll();
+        if (animTimer.current) clearTimeout(animTimer.current);
+      };
+    }
     return () => {
       alive = false;
-      clearInterval(id);
+      stopPoll();
       if (animTimer.current) clearTimeout(animTimer.current);
     };
   }, [overlayKey]);

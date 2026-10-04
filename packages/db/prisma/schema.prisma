@@ -259,6 +259,8 @@ model Event {
   completedAt       DateTime?
   cancelledAt       DateTime?
   cancelReason      String?
+  /// Set once the hoster records winners after completion.
+  winnersRecordedAt DateTime?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -431,7 +433,9 @@ model PayoutConfirmation {
   place       Int
   response    PayoutResponse  @default(NO_RESPONSE)
   deadline    DateTime
+  reminderSentAt DateTime?
   respondedAt DateTime?
+  note        String?
   createdAt   DateTime        @default(now())
 
   @@unique([eventId, winnerId])
@@ -473,6 +477,7 @@ model Report {
   assignedStaffId String?
   assignedStaff   User?          @relation("AssignedStaff", fields: [assignedStaffId], references: [id])
   accusedResponse String?
+  responseDeadline DateTime?
   respondedAt     DateTime?
   resolvedAt      DateTime?
   resolution      String?
@@ -499,7 +504,10 @@ model Evidence {
   reportId      String
   report        Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
   type          EvidenceType
-  url           String
+  /// External link (VOD, screenshot host) when no file was uploaded.
+  url           String?
+  /// Object key in private storage when a file was uploaded.
+  storageKey    String?
   note          String       @default("")
   submittedById String
   submittedBy   User         @relation(fields: [submittedById], references: [id])

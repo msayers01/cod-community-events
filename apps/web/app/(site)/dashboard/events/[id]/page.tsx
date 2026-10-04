@@ -8,6 +8,7 @@ import { label } from "@/lib/format";
 import { StatusTag } from "@/components/event-card";
 import { LocalTime } from "@/components/local-time";
 import { ManagePanel } from "./manage-panel";
+import { LiveEvent } from "@/components/live-event";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,10 @@ export default async function ManageEventPage({ params }: { params: Promise<{ id
           },
         },
       },
+      payoutConfirmations: {
+        include: { winner: { select: { displayName: true } } },
+        orderBy: { place: "asc" },
+      },
       rounds: {
         orderBy: { roundNumber: "asc" },
         include: {
@@ -64,6 +69,7 @@ export default async function ManageEventPage({ params }: { params: Promise<{ id
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold">{event.title}</h1>
             <StatusTag status={event.status} />
+            <LiveEvent eventId={event.id} />
           </div>
           <p className="text-sm text-muted">
             <LocalTime date={event.startsAt} /> · {event.teamSize}v{event.teamSize}{" "}
@@ -86,6 +92,18 @@ export default async function ManageEventPage({ params }: { params: Promise<{ id
           roundCount: event.roundCount,
           teamSize: event.teamSize,
           poolSize: event.registrations.filter((r) => r.status === "IN_POOL").length,
+          payoutPlaces: (event.payoutSplit as { place: number; percent: number }[])
+            .filter((p) => p.percent > 0)
+            .map((p) => p.place),
+          poolPlayers: event.registrations
+            .filter((r) => r.status === "IN_POOL")
+            .map((r) => ({ id: r.player.id, displayName: r.player.displayName })),
+          winners: event.payoutConfirmations.map((p) => ({
+            place: p.place,
+            displayName: p.winner.displayName,
+            response: p.response,
+          })),
+          winnersRecorded: !!event.winnersRecordedAt,
         }}
         rounds={event.rounds.map((r) => ({
           id: r.id,

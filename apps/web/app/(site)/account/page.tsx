@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@cod/db";
 import { getCurrentUser } from "@/lib/session";
+import Link from "next/link";
 import { ProfileForm } from "./form";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,15 @@ export default async function AccountPage() {
       <p className="mt-1 text-sm text-muted">
         Your Activision ID is shown to hosters and teammates. We never pull data from Activision;
         it&apos;s display only.
+      </p>
+      <p className="mt-2 text-sm">
+        <Link href="/account/reports" className="text-accent">
+          Reports involving you
+        </Link>{" "}
+        ·{" "}
+        <Link href="/payouts" className="text-accent">
+          Payout confirmations
+        </Link>
       </p>
       <ProfileForm initial={user} />
       <section className="card mt-6 text-sm">

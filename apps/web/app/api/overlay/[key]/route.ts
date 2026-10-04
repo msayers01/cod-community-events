@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { overlayState } from "@/modules/wheel/service";
+import { overlayState } from "@/modules/wheel/overlay-state";
 
 export const dynamic = "force-dynamic";
 

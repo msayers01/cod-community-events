@@ -1,4 +1,5 @@
 import { headers, cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@cod/db";
 import type { Actor } from "@cod/shared";
 import { auth } from "./auth";
@@ -51,5 +52,13 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 export async function requireUser(): Promise<CurrentUser> {
   const u = await getCurrentUser();
   if (!u) throw new Error("UNAUTHENTICATED");
+  return u;
+}
+
+/** For staff-only pages: redirects instead of throwing so layouts and pages agree. */
+export async function requireStaff(): Promise<CurrentUser> {
+  const u = await getCurrentUser();
+  if (!u) redirect("/sign-in");
+  if (!u.actor.staffRole) redirect("/");
   return u;
 }

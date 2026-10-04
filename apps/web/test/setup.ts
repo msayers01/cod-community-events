@@ -13,6 +13,13 @@ export async function makeUser(prefix = "u") {
   });
 }
 
+export async function makeStaff(role: "TRIAL_MODERATOR" | "MODERATOR" | "ADMIN") {
+  const user = await makeUser("s");
+  await prisma.staffRole.create({ data: { userId: user.id, role } });
+  const actor: Actor = { userId: user.id, staffRole: role, isHoster: false };
+  return { user, actor };
+}
+
 export async function makeHoster() {
   const user = await makeUser("h");
   await prisma.hosterProfile.create({ data: { userId: user.id } });
@@ -56,15 +63,25 @@ export async function makeEvent(
 
 export async function cleanup() {
   // Tests create isolated users/events; remove anything with the test email domain.
+  // Users who appear in the append-only staff action log cannot be deleted (by design), so they stay.
   const users = await prisma.user.findMany({
     where: { email: { endsWith: "@test.local" } },
     select: { id: true },
   });
   const ids = users.map((u) => u.id);
+  await prisma.report.deleteMany({
+    where: { OR: [{ reporterId: { in: ids } }, { reportedUserId: { in: ids } }] },
+  });
   await prisma.sanction.deleteMany({
     where: { OR: [{ userId: { in: ids } }, { issuedById: { in: ids } }] },
   });
   await prisma.event.deleteMany({ where: { hosterId: { in: ids } } });
   await prisma.outboxEvent.deleteMany({});
-  await prisma.user.deleteMany({ where: { id: { in: ids } } });
+  const logged = await prisma.staffActionLog.findMany({
+    where: { staffUserId: { in: ids } },
+    select: { staffUserId: true },
+    distinct: ["staffUserId"],
+  });
+  const keep = new Set(logged.map((l) => l.staffUserId));
+  await prisma.user.deleteMany({ where: { id: { in: ids.filter((id) => !keep.has(id)) } } });
 }

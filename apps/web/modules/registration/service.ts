@@ -7,6 +7,7 @@ import {
   type SignupSource,
 } from "@cod/shared";
 import { DomainError, ForbiddenError, NotFoundError } from "@/lib/errors";
+import { publishEventUpdate } from "@/modules/realtime/publish";
 
 type Tx = Prisma.TransactionClient;
 
@@ -36,7 +37,7 @@ async function confirmedCount(tx: Tx, eventId: string): Promise<number> {
 
 /** A player signs up. Everyone starts on the waitlist until the hoster marks them paid. */
 export async function register(userId: string, eventId: string, source: SignupSource = "WEBSITE") {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const event = await tx.event.findUnique({ where: { id: eventId } });
     if (!event) throw new NotFoundError("Event");
     if (event.status !== "OPEN" && event.status !== "CHECK_IN") {
@@ -78,11 +79,13 @@ export async function register(userId: string, eventId: string, source: SignupSo
     await emit(tx, { type: "PlayerRegistered", eventId, registrationId: reg.id, userId });
     return reg;
   });
+  await publishEventUpdate(result.eventId, "registration");
+  return result;
 }
 
 /** Hoster marks a waitlisted player as paid, which confirms their spot. */
 export async function markPaid(actor: Actor, registrationId: string) {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const reg = await tx.registration.findUnique({
       where: { id: registrationId },
       include: { event: true },
@@ -111,10 +114,12 @@ export async function markPaid(actor: Actor, registrationId: string) {
     });
     return updated;
   });
+  await publishEventUpdate(result.eventId, "registration");
+  return result;
 }
 
 export async function withdraw(userId: string, registrationId: string) {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const reg = await tx.registration.findUnique({ where: { id: registrationId } });
     if (!reg || reg.playerId !== userId) throw new NotFoundError("Registration");
     registrationMachine.assertTransition(reg.status, "WITHDRAWN");
@@ -126,10 +131,12 @@ export async function withdraw(userId: string, registrationId: string) {
     await emit(tx, { type: "RegistrationWithdrawn", eventId: reg.eventId, registrationId, userId });
     return updated;
   });
+  await publishEventUpdate(result.eventId, "registration");
+  return result;
 }
 
 export async function remove(actor: Actor, registrationId: string, reason: string) {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const reg = await tx.registration.findUnique({
       where: { id: registrationId },
       include: { event: true },
@@ -152,10 +159,12 @@ export async function remove(actor: Actor, registrationId: string, reason: strin
     });
     return updated;
   });
+  await publishEventUpdate(result.eventId, "registration");
+  return result;
 }
 
 export async function checkIn(userId: string, registrationId: string) {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const reg = await tx.registration.findUnique({
       where: { id: registrationId },
       include: { event: true },
@@ -171,6 +180,8 @@ export async function checkIn(userId: string, registrationId: string) {
     await emit(tx, { type: "PlayerCheckedIn", eventId: reg.eventId, registrationId, userId });
     return updated;
   });
+  await publishEventUpdate(result.eventId, "registration");
+  return result;
 }
 
 /** Hoster adds a late entry by display name or Activision ID (e.g. from Twitch chat). */

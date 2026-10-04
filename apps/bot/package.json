@@ -14,7 +14,8 @@
   "dependencies": {
     "@cod/db": "workspace:*",
     "@cod/shared": "workspace:*",
-    "discord.js": "^14.27.0"
+    "discord.js": "^14.27.0",
+    "@sentry/node": "^11.4.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

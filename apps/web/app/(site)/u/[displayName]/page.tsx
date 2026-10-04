@@ -3,6 +3,8 @@ import Link from "next/link";
 import { prisma } from "@cod/db";
 import { label } from "@/lib/format";
 import { LocalTime } from "@/components/local-time";
+import { getCurrentUser } from "@/lib/session";
+import { hosterPayoutRecord } from "@/modules/reputation/service";
 
 export const dynamic = "force-dynamic";
 
@@ -36,11 +38,10 @@ export default async function ProfilePage({
   const played = user.registrations.filter(
     (r) => r.status !== "NO_SHOW" && ["COMPLETED", "ARCHIVED"].includes(r.event.status),
   ).length;
-  const confirmedPayouts = user.hosterProfile
-    ? await prisma.payoutConfirmation.count({
-        where: { event: { hosterId: user.id }, response: "PAID" },
-      })
-    : 0;
+  const [viewer, payoutRecord] = await Promise.all([
+    getCurrentUser(),
+    user.hosterProfile ? hosterPayoutRecord(user.id) : null,
+  ]);
   const badges = [
     user.staffRole && !user.staffRole.badgeHidden
       ? user.staffRole.role === "FOUNDER"
@@ -63,6 +64,22 @@ export default async function ProfilePage({
               {b}
             </span>
           ))}
+          {user.status !== "ACTIVE" && (
+            <span className="tag border-warn text-warn">{user.status.toLowerCase()}</span>
+          )}
+          {viewer && viewer.id !== user.id && (
+            <Link
+              href={`/report/${user.id}`}
+              className="ml-auto text-xs text-muted hover:text-warn"
+            >
+              Report this user
+            </Link>
+          )}
+          {viewer?.actor.staffRole && (
+            <Link href={`/staff/users/${user.id}`} className="text-xs text-muted hover:text-accent">
+              Staff view
+            </Link>
+          )}
         </div>
         <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
           <div>
@@ -98,11 +115,12 @@ export default async function ProfilePage({
       <section className="grid gap-4 sm:grid-cols-3">
         <Stat label="Events played" value={played} />
         <Stat label="No-shows" value={noShows} warn={noShows > 0} />
-        {user.hosterProfile && (
+        {user.hosterProfile && payoutRecord && (
           <Stat
             label="Events hosted"
-            value={user.hosterProfile._count.events}
-            sub={`${confirmedPayouts} confirmed payouts`}
+            value={payoutRecord.completedEvents}
+            sub={`${payoutRecord.paid} confirmed payouts${payoutRecord.notPaid ? ` · ${payoutRecord.notPaid} reported unpaid` : ""}`}
+            warn={payoutRecord.notPaid > 0}
           />
         )}
       </section>

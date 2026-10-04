@@ -7,8 +7,10 @@ import {
   executeSpinAction,
   markPaidAction,
   quickAddAction,
+  recordWinnersAction,
   regenerateOverlayKeyAction,
   removePlayerAction,
+  saveTemplateAction,
 } from "@/app/(site)/dashboard/actions";
 import type { ActionResult } from "@/lib/actions";
 import { FormMessage } from "@/components/form-message";
@@ -44,6 +46,10 @@ interface Props {
     roundCount: number | null;
     teamSize: number;
     poolSize: number;
+    payoutPlaces: number[];
+    poolPlayers: { id: string; displayName: string }[];
+    winners: { place: number; displayName: string; response: string }[];
+    winnersRecorded: boolean;
   };
   rounds: Round[];
   waitlist: Row[];
@@ -57,6 +63,7 @@ export function ManagePanel({ event, rounds, waitlist, paid, removed }: Props) {
   const run = (fn: () => Promise<ActionResult>) => start(async () => setResult(await fn()));
   const [identifier, setIdentifier] = useState("");
   const [showRemoved, setShowRemoved] = useState(false);
+  const [winnerPicks, setWinnerPicks] = useState<Record<number, string>>({});
 
   const joinUrl = `${event.appUrl}/join/${event.joinCode}`;
   const overlayUrl = `${event.appUrl}/overlay/${event.overlayKey}`;
@@ -132,6 +139,16 @@ export function ManagePanel({ event, rounds, waitlist, paid, removed }: Props) {
                 This event is {label(event.status).toLowerCase()}.
               </p>
             )}
+            <button
+              className="btn"
+              disabled={pending}
+              onClick={() => {
+                const name = prompt("Template name?");
+                if (name) run(() => saveTemplateAction(event.id, name));
+              }}
+            >
+              Save as template
+            </button>
           </div>
           <FormMessage
             error={result && !result.ok ? result.error : null}
@@ -204,6 +221,76 @@ export function ManagePanel({ event, rounds, waitlist, paid, removed }: Props) {
               >
                 Prepare round {rounds.length + 1} (publish commitment)
               </button>
+            )}
+          </section>
+        )}
+
+        {/* Winners & payouts */}
+        {["COMPLETED", "ARCHIVED"].includes(event.status) && (
+          <section className="card">
+            <h2 className="mb-1 font-semibold">Winners & payout confirmation</h2>
+            {event.winnersRecorded ? (
+              <ul className="space-y-1 text-sm">
+                {event.winners.map((w) => (
+                  <li key={w.place} className="flex items-center justify-between">
+                    <span>
+                      #{w.place} {w.displayName}
+                    </span>
+                    <span
+                      className={`tag ${w.response === "PAID" ? "border-ok text-ok" : w.response === "NOT_PAID" ? "border-warn text-warn" : ""}`}
+                    >
+                      {w.response === "PAID"
+                        ? "Payout confirmed"
+                        : w.response === "NOT_PAID"
+                          ? "Reported unpaid"
+                          : "Awaiting confirmation"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <>
+                <p className="mb-3 text-xs text-muted">
+                  Record who won each paid place. Winners get a prompt to confirm you paid them;
+                  confirmed payouts build your public record.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {event.payoutPlaces.map((place) => (
+                    <label key={place} className="text-sm">
+                      <span className="label">Place {place}</span>
+                      <select
+                        className="input"
+                        value={winnerPicks[place] ?? ""}
+                        onChange={(e) =>
+                          setWinnerPicks({ ...winnerPicks, [place]: e.target.value })
+                        }
+                      >
+                        <option value="">Select player</option>
+                        {event.poolPlayers.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.displayName}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+                <button
+                  className="btn btn-primary mt-3"
+                  disabled={pending || event.payoutPlaces.some((p) => !winnerPicks[p])}
+                  onClick={() =>
+                    confirm("Record these winners? This cannot be changed.") &&
+                    run(() =>
+                      recordWinnersAction(
+                        event.id,
+                        event.payoutPlaces.map((place) => ({ place, userId: winnerPicks[place]! })),
+                      ),
+                    )
+                  }
+                >
+                  Record winners
+                </button>
+              </>
             )}
           </section>
         )}

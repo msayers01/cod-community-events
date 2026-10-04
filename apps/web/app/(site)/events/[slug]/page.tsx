@@ -8,6 +8,7 @@ import { LocalTime } from "@/components/local-time";
 import { StatusTag } from "@/components/event-card";
 import { SignupPanel } from "./signup-panel";
 import { SpinLog } from "./spin-log";
+import { LiveEvent } from "@/components/live-event";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold tracking-tight">{event.title}</h1>
             <StatusTag status={event.status} />
+            <LiveEvent eventId={event.id} />
           </div>
           <p className="mt-1 text-muted">
             Hosted by{" "}

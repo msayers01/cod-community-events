@@ -53,3 +53,14 @@ describe("recusal", () => {
     expect(canGiveSecondApproval(trial, "m2", base)).toBe(false);
   });
 });
+
+describe("sanctions", () => {
+  it("escalate with rank", async () => {
+    const { canIssueSanction } = await import("../src/index.js");
+    expect(canIssueSanction(trial, "WARNING")).toBe(true);
+    expect(canIssueSanction(trial, "SUSPENSION")).toBe(false);
+    expect(canIssueSanction(mod, "SUSPENSION")).toBe(true);
+    expect(canIssueSanction(mod, "PERMANENT_BAN")).toBe(false);
+    expect(canIssueSanction(admin, "PERMANENT_BAN")).toBe(true);
+  });
+});
