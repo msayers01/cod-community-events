@@ -1,0 +1,110 @@
+# Production-shaped stack on one machine: Postgres, Redis, a one-shot migration, then the
+# web app, worker and realtime server (and the Discord bot with `--profile bot`).
+#
+#   cp deploy/production.env.example .env.production   # fill it in
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#
+# On Railway or similar, don't use this file: create one service per SERVICE value instead
+# (docs/05-deployment.md). The images are identical.
+name: cod-events
+
+x-app: &app
+  image: cod-events:local
+  pull_policy: never
+  restart: unless-stopped
+  depends_on:
+    migrate: { condition: service_completed_successfully }
+    redis: { condition: service_started }
+  environment: &env
+    DATABASE_URL: postgresql://cod:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/cod?schema=public
+    REDIS_URL: redis://redis:6379
+    BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+    BETTER_AUTH_URL: ${NEXT_PUBLIC_APP_URL:-}
+    NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
+    NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-}
+    REALTIME_CORS_ORIGINS: ${REALTIME_CORS_ORIGINS:-${NEXT_PUBLIC_APP_URL:-}}
+    DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+    DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+    TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}
+    TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
+    DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+    R2_ENDPOINT: ${R2_ENDPOINT:-}
+    R2_BUCKET: ${R2_BUCKET:-}
+    R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+    R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+    SENTRY_DSN: ${SENTRY_DSN:-}
+    NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cod
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: cod
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cod -d cod"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+
+  # Builds the shared image, applies pending migrations, exits. Every other service waits for it.
+  migrate:
+    <<: *app
+    build:
+      context: .
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-node:22-slim}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+        NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    pull_policy: build
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      <<: *env
+      SERVICE: migrate
+
+  web:
+    <<: *app
+    environment:
+      <<: *env
+      SERVICE: web
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+
+  worker:
+    <<: *app
+    environment:
+      <<: *env
+      SERVICE: worker
+
+  realtime:
+    <<: *app
+    environment:
+      <<: *env
+      SERVICE: realtime
+    ports:
+      - "${REALTIME_PORT:-3001}:3001"
+
+  bot:
+    <<: *app
+    profiles: ["bot"]
+    environment:
+      <<: *env
+      SERVICE: bot
+
+volumes:
+  pgdata:
+  redisdata:

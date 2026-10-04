@@ -1,16 +1,37 @@
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createWorker, PSM, type Worker } from "tesseract.js";
 import type { OcrEngine, OcrWord } from "@cod/core";
 
 /**
- * Tesseract (free, open source) running in-process. Language data is fetched on first use;
- * set TESSERACT_LANG_PATH to a directory or URL holding eng.traineddata(.gz) to run offline.
+ * Where English language data comes from. The `@tesseract.js-data/eng` package ships it, so the
+ * worker needs no network (no CDN call on first use, which would also fail in a locked-down
+ * container). TESSERACT_LANG_PATH overrides it; if the package is missing, Tesseract falls back
+ * to its CDN.
+ */
+export function langPath(): string | undefined {
+  if (process.env.TESSERACT_LANG_PATH) return process.env.TESSERACT_LANG_PATH;
+  try {
+    const pkg = createRequire(import.meta.url).resolve("@tesseract.js-data/eng/package.json");
+    return path.join(path.dirname(pkg), "4.0.0_best_int");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Tesseract (free, open source) running in-process, fully offline.
  * If accuracy proves insufficient, implement OcrEngine against Cloud Vision or Textract.
  */
 export function createTesseractEngine(): OcrEngine & { close(): Promise<void> } {
   let worker: Promise<Worker> | null = null;
   const get = () =>
     (worker ??= createWorker("eng", 1, {
-      ...(process.env.TESSERACT_LANG_PATH && { langPath: process.env.TESSERACT_LANG_PATH }),
+      ...(langPath() && { langPath: langPath() }),
+      // Tesseract caches the decompressed data next to where it runs; keep that out of the app
+      // directory, which may be read-only in a container.
+      cachePath: process.env.TESSERACT_CACHE_PATH ?? tmpdir(),
     }));
   return {
     name: "tesseract",

@@ -6,3 +6,4 @@ export * from "./wheel/skill.js";
 export * from "./domain-events/index.js";
 export * from "./policy/index.js";
 export * from "./schemas/index.js";
+export * from "./deploy-env.js";
