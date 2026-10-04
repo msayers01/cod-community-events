@@ -15,6 +15,22 @@ async function main() {
     },
   });
 
+  for (const [name, role] of [
+    ["Moderator", "MODERATOR"],
+    ["TrialMod", "TRIAL_MODERATOR"],
+  ] as const) {
+    await prisma.user.upsert({
+      where: { email: `${name.toLowerCase()}@example.com` },
+      update: {},
+      create: {
+        name,
+        email: `${name.toLowerCase()}@example.com`,
+        displayName: name,
+        staffRole: { create: { role } },
+      },
+    });
+  }
+
   const hosterUser = await prisma.user.upsert({
     where: { email: "hoster@example.com" },
     update: {},

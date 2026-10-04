@@ -1,15 +1,16 @@
 "use client";
 import { useActionState, useState } from "react";
 import { useClientValue } from "@/lib/use-client-value";
-import { EntryType, GameMode, Platform, Region } from "@cod/shared";
+import { EntryType, GameMode, Platform, Region, type EventTemplateSettings } from "@cod/shared";
 import { createEventAction } from "@/app/(site)/dashboard/actions";
 import { FormMessage } from "@/components/form-message";
 import { label } from "@/lib/format";
 
-export function NewEventForm() {
+export function NewEventForm({ template }: { template: EventTemplateSettings | null }) {
   const [result, action, pending] = useActionState(createEventAction, null);
-  const [format, setFormat] = useState("SWITCHEROO");
-  const [entryType, setEntryType] = useState("OPEN");
+  const t = template;
+  const [format, setFormat] = useState<string>(t?.format ?? "SWITCHEROO");
+  const [entryType, setEntryType] = useState<string>(t?.entryType ?? "OPEN");
   const tz = useClientValue(() => String(new Date().getTimezoneOffset()), "0");
 
   return (
@@ -20,10 +21,21 @@ export function NewEventForm() {
         <label className="label" htmlFor="description">
           Description
         </label>
-        <textarea id="description" name="description" className="input" rows={4} />
+        <textarea
+          id="description"
+          name="description"
+          className="input"
+          rows={4}
+          defaultValue={t?.description ?? ""}
+        />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <SelectField label="Mode" name="mode" options={Object.values(GameMode)} />
+        <SelectField
+          label="Mode"
+          name="mode"
+          options={Object.values(GameMode)}
+          defaultValue={t?.mode}
+        />
         <SelectField
           label="Format"
           name="format"
@@ -67,8 +79,17 @@ export function NewEventForm() {
           defaultValue="10"
           min={0}
         />
-        <Field label="Payout split (%, 1st/2nd/...)" name="payoutSplit" defaultValue="70/30" />
-        <SelectField label="Region" name="region" options={Object.values(Region)} />
+        <Field
+          label="Payout split (%, 1st/2nd/...)"
+          name="payoutSplit"
+          defaultValue={t ? t.payoutSplit.map((p) => p.percent).join("/") : "70/30"}
+        />
+        <SelectField
+          label="Region"
+          name="region"
+          options={Object.values(Region)}
+          defaultValue={t?.region}
+        />
         <SelectField
           label="Platform"
           name="platform"
@@ -101,20 +122,40 @@ export function NewEventForm() {
         name="mapPool"
         placeholder="Hacienda, Red Card, Vault"
       />
-      <Field label="Banned items (comma separated)" name="bannedItems" />
+      <Field
+        label="Banned items (comma separated)"
+        name="bannedItems"
+        defaultValue={t?.rules.bannedItems.join(", ")}
+      />
       <div className="flex gap-6 text-sm">
         <label className="flex items-center gap-2">
-          <input type="checkbox" name="streamingRequired" /> Streaming required
+          <input
+            type="checkbox"
+            name="streamingRequired"
+            defaultChecked={t?.rules.streamingRequired ?? false}
+          />{" "}
+          Streaming required
         </label>
         <label className="flex items-center gap-2">
-          <input type="checkbox" name="monicamOnRequest" defaultChecked /> Monicam on request
+          <input
+            type="checkbox"
+            name="monicamOnRequest"
+            defaultChecked={t?.rules.monicamOnRequest ?? true}
+          />{" "}
+          Monicam on request
         </label>
       </div>
       <div>
         <label className="label" htmlFor="notes">
           Extra rules
         </label>
-        <textarea id="notes" name="notes" className="input" rows={3} />
+        <textarea
+          id="notes"
+          name="notes"
+          className="input"
+          rows={3}
+          defaultValue={t?.rules.notes ?? ""}
+        />
       </div>
       <FormMessage error={result && !result.ok ? result.error : null} />
       <button className="btn btn-primary" disabled={pending}>

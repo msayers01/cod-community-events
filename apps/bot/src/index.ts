@@ -1,5 +1,7 @@
 import { loadRootEnv } from "@cod/db";
 loadRootEnv();
+import { initSentry } from "./sentry.js";
+initSentry("bot");
 import { Client, EmbedBuilder, GatewayIntentBits, type TextChannel } from "discord.js";
 import { prisma } from "@cod/db";
 

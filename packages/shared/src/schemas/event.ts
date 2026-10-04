@@ -88,3 +88,27 @@ export const eventFilterSchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 export type EventFilter = z.infer<typeof eventFilterSchema>;
+
+/** Reusable settings a hoster saves as a template: everything except title/description/times. */
+export const eventTemplateSettingsSchema = z.object({
+  mode: z.enum(enumValues(GameMode)),
+  format: z.enum(enumValues(EventFormat)),
+  teamSize: z.number().int().min(1).max(6),
+  roundCount: z.number().int().min(1).max(20).nullable().default(null),
+  playerCap: z.number().int().min(2).max(256),
+  entryFeeCents: z.number().int().min(0).max(1_000_000).default(0),
+  currency: z.string().length(3).toUpperCase().default("USD"),
+  payoutSplit: payoutSplitSchema.default([{ place: 1, percent: 100 }]),
+  region: z.enum(enumValues(Region)),
+  platform: z.enum(enumValues(Platform)),
+  rules: eventRulesSchema.prefault({}),
+  entryType: z.enum(enumValues(EntryType)).default(EntryType.OPEN),
+  entryRequirements: entryRequirementsSchema.nullable().default(null),
+  description: z.string().trim().max(5000).default(""),
+});
+export type EventTemplateSettings = z.infer<typeof eventTemplateSettingsSchema>;
+
+export const saveTemplateSchema = z.object({
+  eventId: z.string().min(1),
+  name: z.string().trim().min(2).max(60),
+});

@@ -16,7 +16,8 @@
     "@cod/shared": "workspace:*",
     "bullmq": "^5.0.0",
     "ioredis": "^5.9.0",
-    "@cod/realtime": "workspace:*"
+    "@cod/realtime": "workspace:*",
+    "@sentry/node": "^11.4.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

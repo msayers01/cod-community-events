@@ -3,6 +3,8 @@ import Link from "next/link";
 import "../globals.css";
 import { getCurrentUser } from "@/lib/session";
 import { UserMenu } from "@/components/user-menu";
+import { unreadCount } from "@/modules/notifications/service";
+import { pendingPayoutsFor } from "@/modules/reputation/service";
 
 export const metadata: Metadata = {
   title: { default: "CoD Community Events", template: "%s · CoD Community Events" },
@@ -11,6 +13,9 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
+  const [unread, pendingPayouts] = user
+    ? await Promise.all([unreadCount(user.id), pendingPayoutsFor(user.id)])
+    : [0, []];
   return (
     <html lang="en">
       <body className="min-h-screen">
@@ -28,6 +33,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   Hoster dashboard
                 </Link>
               )}
+              {user?.actor.staffRole && (
+                <Link href="/staff" className="text-sm text-muted hover:text-ink">
+                  Staff
+                </Link>
+              )}
             </div>
             <UserMenu
               user={
@@ -39,6 +49,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     }
                   : null
               }
+              unread={unread}
+              pendingPayouts={pendingPayouts.length}
             />
           </nav>
         </header>

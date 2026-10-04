@@ -2,6 +2,7 @@ import { prisma, emit, type Prisma } from "@cod/db";
 import {
   canManageEvent,
   createEventSchema,
+  eventTemplateSettingsSchema,
   eventMachine,
   hasPermission,
   type Actor,
@@ -265,3 +266,48 @@ export function assertEventExists<T>(e: T | null): T {
 }
 
 export { DomainError };
+
+// ───────────── Templates ─────────────
+
+export async function saveTemplateFromEvent(actor: Actor, eventId: string, name: string) {
+  const event = await loadOwnedEvent(actor, eventId);
+  const settings = eventTemplateSettingsSchema.parse({
+    mode: event.mode,
+    format: event.format,
+    teamSize: event.teamSize,
+    roundCount: event.roundCount,
+    playerCap: event.playerCap,
+    entryFeeCents: event.entryFeeCents,
+    currency: event.currency,
+    payoutSplit: event.payoutSplit,
+    region: event.region,
+    platform: event.platform,
+    rules: event.rules,
+    entryType: event.entryType,
+    entryRequirements: event.entryRequirements,
+    description: event.description,
+  });
+  return prisma.eventTemplate.upsert({
+    where: { hosterId_name: { hosterId: actor.userId, name } },
+    update: { settings: settings as Prisma.InputJsonValue },
+    create: { hosterId: actor.userId, name, settings: settings as Prisma.InputJsonValue },
+  });
+}
+
+export async function listTemplates(actor: Actor) {
+  return prisma.eventTemplate.findMany({
+    where: { hosterId: actor.userId },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
+export async function getTemplate(actor: Actor, templateId: string) {
+  const t = await prisma.eventTemplate.findUnique({ where: { id: templateId } });
+  if (!t || t.hosterId !== actor.userId) throw new NotFoundError("Template");
+  return { ...t, settings: eventTemplateSettingsSchema.parse(t.settings) };
+}
+
+export async function deleteTemplate(actor: Actor, templateId: string) {
+  await getTemplate(actor, templateId);
+  await prisma.eventTemplate.delete({ where: { id: templateId } });
+}

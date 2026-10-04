@@ -2,6 +2,8 @@ import { loadRootEnv, prisma } from "@cod/db";
 import { createRealtimeServer } from "./server.js";
 
 loadRootEnv();
+import { initSentry } from "./sentry.js";
+initSentry("realtime");
 
 const port = Number(process.env.REALTIME_PORT ?? 3001);
 const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6379";

@@ -52,6 +52,20 @@ Each event has a private overlay URL (`/overlay/<key>`) shown on the hoster dash
 Browser Source. The overlay only displays what the server decided; it never picks teams. It receives
 state over Socket.IO from the real-time server and falls back to polling if that is unreachable.
 
+### Moderation
+
+Any signed-in user can report another from their profile. Reports need evidence (links, or private uploads
+when R2 is configured) and go to the staff queue at `/staff`. Staff assign, request a response from the
+accused, add evidence, sanction (warning / suspension / permanent ban, escalating with rank), and close.
+Recusal is enforced from declared conflicts and event involvement. Every staff action needs a reason and
+lands in the append-only log at `/staff/log`. Public attribution is always "staff".
+
+### Payout confirmation
+
+After completing an event the hoster records the winners. Each winner gets a prompt (`/payouts`) to confirm
+they were paid. "Not paid" automatically opens a non-payment report. Confirmed and denied payouts appear on
+the hoster's profile.
+
 ### Real-time
 
 Services publish an envelope to Redis after each committed change (`apps/web/modules/realtime/publish.ts`).
@@ -84,12 +98,14 @@ database. Shared package tests are pure unit tests.
 
 ## Status
 
-Phase 1 in progress. Done: accounts and OAuth wiring, hoster registration, event creation and
+Phase 1 feature-complete pending real-world testing. Done: accounts and OAuth wiring, hoster registration, event creation and
 lifecycle, listings with filters, sign-ups with hoster-marked payment and automatic waitlist,
 Twitch join links and quick-add, check-in and no-show recording, commit-reveal wheel with public
 spin log and OBS overlay, Socket.IO real-time push for event pages, dashboard and overlay,
 append-only staff action log enforced in the database, outbox worker with notifications, Discord
-bot posting published events.
+bot posting published events, event templates, mod-reviewed report system with staff queue, sanctions,
+internal notes and action log, payout confirmation prompts with automatic non-payment reports, in-site
+notifications, Sentry (env-gated) and private R2 evidence uploads (env-gated).
 
-Next up in Phase 1: event templates, mod report queue UI, payout confirmation prompts, Sentry,
-file uploads for evidence (R2).
+Before launch: X account linking, OAuth apps and R2/Sentry credentials, legal review of blacklist wording
+(Phase 2), Playwright end-to-end tests of the sign-up → spin → payout flow.

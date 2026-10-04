@@ -1,5 +1,7 @@
 import { loadRootEnv } from "@cod/db";
 loadRootEnv();
+import { initSentry } from "./sentry.js";
+initSentry("worker");
 import { prisma } from "@cod/db";
 import { processOutboxBatch } from "./outbox.js";
 import { redis, startTimerWorker, timerQueue } from "./jobs.js";

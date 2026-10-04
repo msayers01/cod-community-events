@@ -40,6 +40,10 @@ export default async function ManageEventPage({ params }: { params: Promise<{ id
           },
         },
       },
+      payoutConfirmations: {
+        include: { winner: { select: { displayName: true } } },
+        orderBy: { place: "asc" },
+      },
       rounds: {
         orderBy: { roundNumber: "asc" },
         include: {
@@ -88,6 +92,18 @@ export default async function ManageEventPage({ params }: { params: Promise<{ id
           roundCount: event.roundCount,
           teamSize: event.teamSize,
           poolSize: event.registrations.filter((r) => r.status === "IN_POOL").length,
+          payoutPlaces: (event.payoutSplit as { place: number; percent: number }[])
+            .filter((p) => p.percent > 0)
+            .map((p) => p.place),
+          poolPlayers: event.registrations
+            .filter((r) => r.status === "IN_POOL")
+            .map((r) => ({ id: r.player.id, displayName: r.player.displayName })),
+          winners: event.payoutConfirmations.map((p) => ({
+            place: p.place,
+            displayName: p.winner.displayName,
+            response: p.response,
+          })),
+          winnersRecorded: !!event.winnersRecordedAt,
         }}
         rounds={event.rounds.map((r) => ({
           id: r.id,

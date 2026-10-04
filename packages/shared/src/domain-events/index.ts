@@ -16,7 +16,12 @@ export type DomainEvent =
   | { type: "PlayerCheckedIn"; eventId: string; registrationId: string; userId: string }
   | { type: "SpinCommitted"; eventId: string; roundId: string; spinId: string }
   | { type: "SpinCompleted"; eventId: string; roundId: string; spinId: string }
+  | { type: "WinnersRecorded"; eventId: string }
+  | { type: "PayoutConfirmed"; eventId: string; payoutConfirmationId: string; winnerId: string }
+  | { type: "PayoutDenied"; eventId: string; payoutConfirmationId: string; winnerId: string }
   | { type: "ReportFiled"; reportId: string; reportedUserId: string }
+  | { type: "ReportStatusChanged"; reportId: string; status: string }
+  | { type: "SanctionIssued"; sanctionId: string; userId: string }
   | { type: "StaffActionLogged"; logId: string };
 
 export type DomainEventType = DomainEvent["type"];
@@ -35,6 +40,11 @@ export const DOMAIN_EVENT_TYPES = [
   "PlayerCheckedIn",
   "SpinCommitted",
   "SpinCompleted",
+  "WinnersRecorded",
+  "PayoutConfirmed",
+  "PayoutDenied",
   "ReportFiled",
+  "ReportStatusChanged",
+  "SanctionIssued",
   "StaffActionLogged",
 ] as const satisfies readonly DomainEventType[];

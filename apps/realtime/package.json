@@ -15,7 +15,8 @@
     "@cod/db": "workspace:*",
     "@cod/realtime": "workspace:*",
     "ioredis": "^5.9.0",
-    "socket.io": "^4.8.4"
+    "socket.io": "^4.8.4",
+    "@sentry/node": "^11.4.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

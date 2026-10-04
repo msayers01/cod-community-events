@@ -1,12 +1,13 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { registerAsHosterSchema } from "@cod/shared";
+import { registerAsHosterSchema, saveTemplateSchema } from "@cod/shared";
 import { requireUser } from "@/lib/session";
 import { runAction, type ActionResult } from "@/lib/actions";
 import * as events from "@/modules/events/service";
 import * as reg from "@/modules/registration/service";
 import * as wheel from "@/modules/wheel/service";
+import * as reputation from "@/modules/reputation/service";
 
 export async function registerAsHosterAction(formData: FormData): Promise<void> {
   const user = await requireUser();
@@ -163,5 +164,31 @@ export async function regenerateOverlayKeyAction(eventId: string): Promise<Actio
     await events.regenerateOverlayKey(actor, eventId);
     revalidatePath(`/dashboard/events/${eventId}`);
     return "New overlay URL generated. Update your OBS browser source.";
+  });
+}
+
+export async function saveTemplateAction(eventId: string, name: string): Promise<ActionResult> {
+  return runAction(async () => {
+    const { actor } = await requireUser();
+    await events.saveTemplateFromEvent(actor, eventId, saveTemplateSchema.shape.name.parse(name));
+    return `Saved template "${name}"`;
+  });
+}
+
+export async function deleteTemplateAction(templateId: string): Promise<void> {
+  const { actor } = await requireUser();
+  await events.deleteTemplate(actor, templateId);
+  revalidatePath("/dashboard/events/new");
+}
+
+export async function recordWinnersAction(
+  eventId: string,
+  winners: { place: number; userId: string }[],
+): Promise<ActionResult> {
+  return runAction(async () => {
+    const { actor } = await requireUser();
+    await reputation.recordWinners(actor, { eventId, winners });
+    revalidatePath(`/dashboard/events/${eventId}`);
+    return "Winners recorded. They will be asked to confirm payment.";
   });
 }
