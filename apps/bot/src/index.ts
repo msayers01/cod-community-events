@@ -25,7 +25,8 @@ const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 if (!token) {
   console.log("[bot] DISCORD_BOT_TOKEN not set; bot idle. Set it to enable posting.");
-  process.exit(0);
+  // Stay alive so `pnpm dev` keeps running; nothing is posted without a token.
+  setInterval(() => undefined, 3_600_000);
 }
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -223,4 +224,4 @@ async function postEvent(eventId: string) {
   }
 }
 
-client.login(token);
+if (token) client.login(token);
