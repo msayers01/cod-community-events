@@ -8,6 +8,7 @@ import {
   type Period,
 } from "@cod/core";
 import { hasPermission } from "@cod/shared";
+import { announceBoards } from "./jobs.js";
 
 /**
  * Reactions to domain events. Each handler must be idempotent: the outbox
@@ -540,7 +541,7 @@ const phase3Handlers: Partial<Record<DomainEvent["type"], Handler[]>> = {
     },
     // Month and season boards refresh now; the all-time board follows on the schedule.
     async (e) => {
-      if (e.type === "MatchVerified") await refreshForMatch(e.matchId);
+      if (e.type === "MatchVerified") await announceBoards(await refreshForMatch(e.matchId));
     },
   ],
   ThrowFlagRaised: [
@@ -558,8 +559,9 @@ const phase3Handlers: Partial<Record<DomainEvent["type"], Handler[]>> = {
   ],
   LeaderboardRefreshRequested: [
     async (e) => {
-      if (e.type === "LeaderboardRefreshRequested")
-        await refreshLeaderboard(e.period as Period, e.periodKey);
+      if (e.type !== "LeaderboardRefreshRequested") return;
+      await refreshLeaderboard(e.period as Period, e.periodKey);
+      await announceBoards([e]);
     },
   ],
   ScreenshotRead: [

@@ -53,5 +53,6 @@ export {
   refreshForMatch,
   refreshLeaderboard,
   sweepLeaderboards,
+  type BoardRef,
   type Period,
 } from "./leaderboards/refresh.js";

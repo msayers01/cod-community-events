@@ -3,6 +3,7 @@ import Link from "next/link";
 import { GameMode, type LeaderboardPeriod } from "@cod/shared";
 import { label } from "@/lib/format";
 import { LocalTime } from "@/components/local-time";
+import { LiveLeaderboard } from "@/components/live-leaderboard";
 import {
   getLeaderboard,
   isValidMonthKey,
@@ -36,6 +37,7 @@ export default async function LeaderboardsPage({
 
   return (
     <div className="mx-auto max-w-3xl">
+      <LiveLeaderboard period={chosen.period} periodKey={chosen.periodKey} />
       <h1 className="text-2xl font-semibold">Leaderboards</h1>
       <p className="mt-1 text-sm text-muted">
         Standings across every event on the site, built only from verified results. A win is worth{" "}
@@ -114,7 +116,7 @@ export default async function LeaderboardsPage({
       </div>
       {updatedAt && (
         <p className="mt-2 text-xs text-muted">
-          Updated <LocalTime date={updatedAt} />. Standings refresh when a result is verified.
+          Updated <LocalTime date={updatedAt} />. Standings update live when a result is verified.
         </p>
       )}
     </div>

@@ -123,31 +123,38 @@ export async function boardsAffectedBy(at: Date): Promise<{ period: Period; peri
   ];
 }
 
-/** Refresh the month and season boards after a match is verified (all-time waits for the sweep). */
-export async function refreshForMatch(matchId: string): Promise<void> {
+export interface BoardRef {
+  period: Period;
+  periodKey: string;
+}
+
+/** Refresh the month and season boards after a match is verified (all-time waits for the sweep). Returns what was rebuilt. */
+export async function refreshForMatch(matchId: string): Promise<BoardRef[]> {
   const sub = await prisma.resultSubmission.findFirst({
     where: { matchId, status: "VERIFIED" },
     select: { resolvedAt: true },
   });
-  if (!sub?.resolvedAt) return;
-  for (const b of await boardsAffectedBy(sub.resolvedAt))
-    if (b.period !== "ALL_TIME") await refreshLeaderboard(b.period, b.periodKey);
+  if (!sub?.resolvedAt) return [];
+  const boards = (await boardsAffectedBy(sub.resolvedAt)).filter((b) => b.period !== "ALL_TIME");
+  for (const b of boards) await refreshLeaderboard(b.period, b.periodKey);
+  return boards;
 }
 
-/** Periodic recalculation: this month, live and just-ended seasons, and the all-time board. */
-export async function sweepLeaderboards(now = new Date()): Promise<void> {
+/** Periodic recalculation: this month, live and just-ended seasons, and the all-time board. Returns what was rebuilt. */
+export async function sweepLeaderboards(now = new Date()): Promise<BoardRef[]> {
   const seasons = await prisma.season.findMany({
     where: { startsAt: { lte: now }, endsAt: { gt: new Date(now.getTime() - 86_400_000) } },
     select: { id: true },
   });
-  await refreshLeaderboard("MONTH", monthKey(now));
-  // A verification that lands just after midnight on the 1st belongs to the new month, but
-  // late disputes from the old month resolve with their own resolvedAt, so refresh it too.
+  const boards: BoardRef[] = [{ period: "MONTH", periodKey: monthKey(now) }];
+  // Late disputes from last month resolve with their own resolvedAt, so refresh it for a couple of days.
   if (now.getUTCDate() <= 2)
-    await refreshLeaderboard(
-      "MONTH",
-      monthKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))),
-    );
-  for (const s of seasons) await refreshLeaderboard("SEASON", s.id);
-  await refreshLeaderboard("ALL_TIME", "all");
+    boards.push({
+      period: "MONTH",
+      periodKey: monthKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))),
+    });
+  boards.push(...seasons.map((s) => ({ period: "SEASON" as const, periodKey: s.id })));
+  boards.push({ period: "ALL_TIME", periodKey: "all" });
+  for (const b of boards) await refreshLeaderboard(b.period, b.periodKey);
+  return boards;
 }
