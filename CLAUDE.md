@@ -6,7 +6,8 @@ pnpm + Turborepo monorepo. TypeScript everywhere. Read `docs/` for product and a
 
 - **Modules own their data.** Code in `apps/web/modules/<module>/service.ts` is the only place that
   writes that module's tables. Pages and server actions call services; they never call Prisma for
-  writes directly.
+  writes directly. Logic the worker also needs (verification windows, reputation recalculation,
+  expiry sweeps) lives in `packages/core` and is re-exported by the web module.
 - **Every lifecycle change goes through a state machine** in `packages/shared/src/state/lifecycles.ts`
   via `assertTransition`. Add new states there first.
 - **Permissions and policies live in `packages/shared/src/policy`.** Never inline a role check.

@@ -192,3 +192,12 @@ export async function recordWinnersAction(
     return "Winners recorded. They will be asked to confirm payment.";
   });
 }
+
+export async function inviteAction(eventId: string, identifier: string): Promise<ActionResult> {
+  return runAction(async () => {
+    const { actor } = await requireUser();
+    await reg.invite(actor, eventId, identifier);
+    revalidatePath(`/dashboard/events/${eventId}`);
+    return `Invited ${identifier}`;
+  });
+}

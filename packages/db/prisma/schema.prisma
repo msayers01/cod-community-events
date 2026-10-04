@@ -67,6 +67,20 @@ model User {
   payoutConfirmations PayoutConfirmation[]
   registrationsMarkedPaid Registration[] @relation("MarkedPaidBy")
   discordConfigs    DiscordServerConfig[]
+  resultSubmissions ResultSubmission[]
+  matchStats        PlayerMatchStat[]
+  confirmations     Confirmation[]
+  disputeResolutions DisputeResolution[]
+  ratingsGiven      TeammateRating[]      @relation("Rater")
+  ratingsReceived   TeammateRating[]      @relation("Rated")
+  hosterReviews     HosterReview[]
+  badges            UserBadge[]
+  reputation        ReputationSummary?
+  blacklistEntries  BlacklistEntry[]      @relation("BlacklistedUser")
+  blacklistProposed BlacklistEntry[]      @relation("BlacklistProposer")
+  blacklistApprovals BlacklistApproval[]
+  appeals           Appeal[]              @relation("Appellant")
+  appealsHandled    Appeal[]              @relation("AppealHandler")
 
   @@map("user")
 }
@@ -270,6 +284,7 @@ model Event {
   spins               Spin[]
   reports             Report[]
   payoutConfirmations PayoutConfirmation[]
+  reviews             HosterReview[]
 
   @@index([status, startsAt])
   @@index([hosterId])
@@ -388,8 +403,9 @@ model Round {
   status      RoundStatus @default(PENDING)
   createdAt   DateTime    @default(now())
 
-  spin  Spin?
-  teams RoundTeam[]
+  spin    Spin?
+  teams   RoundTeam[]
+  matches Match[]
 
   @@unique([eventId, roundNumber])
   @@map("round")
@@ -401,6 +417,9 @@ model RoundTeam {
   round   Round             @relation(fields: [roundId], references: [id], onDelete: Cascade)
   label   String
   members RoundTeamMember[]
+  matchesAsA Match[] @relation("TeamA")
+  matchesAsB Match[] @relation("TeamB")
+  matchesWon Match[] @relation("WinningTeam")
 
   @@unique([roundId, label])
   @@map("round_team")
@@ -484,8 +503,9 @@ model Report {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  evidence  Evidence[]
-  sanctions Sanction[]
+  evidence        Evidence[]
+  sanctions       Sanction[]
+  blacklistEntries BlacklistEntry[]
 
   @@index([reportedUserId])
   @@index([status])
@@ -568,6 +588,305 @@ model StaffActionLog {
   @@index([targetType, targetId])
   @@index([staffUserId])
   @@map("staff_action_log")
+}
+
+
+// ───────────────────────────── Matches (Phase 2) ─────────────────────────────
+
+enum MatchStatus {
+  SCHEDULED
+  RESULT_PENDING
+  VERIFIED
+  DISPUTED
+  UNDER_REVIEW
+  REJECTED
+}
+
+enum SubmissionStatus {
+  PENDING
+  VERIFIED
+  DISPUTED
+  UNCONFIRMED
+  UNDER_REVIEW
+  REJECTED
+}
+
+enum ConfirmationResponse {
+  CONFIRM
+  DISPUTE
+}
+
+model Match {
+  id            String      @id @default(cuid())
+  roundId       String
+  round         Round       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  teamAId       String
+  teamA         RoundTeam   @relation("TeamA", fields: [teamAId], references: [id])
+  teamBId       String
+  teamB         RoundTeam   @relation("TeamB", fields: [teamBId], references: [id])
+  maps          Json        @default("[]")
+  status        MatchStatus @default(SCHEDULED)
+  winningTeamId String?
+  winningTeam   RoundTeam?  @relation("WinningTeam", fields: [winningTeamId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  submissions ResultSubmission[]
+  stats       PlayerMatchStat[]
+  ratings     TeammateRating[]
+
+  @@index([roundId])
+  @@map("match")
+}
+
+model ResultSubmission {
+  id                   String           @id @default(cuid())
+  matchId              String
+  match                Match            @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  submittedById        String
+  submittedBy          User             @relation(fields: [submittedById], references: [id])
+  /// Required scoreboard screenshot: a link or a private upload.
+  screenshotUrl        String?
+  screenshotKey        String?
+  scoreA               Int
+  scoreB               Int
+  winningTeamId        String
+  status               SubmissionStatus @default(PENDING)
+  verificationDeadline DateTime
+  resolvedAt           DateTime?
+  createdAt            DateTime         @default(now())
+
+  stats         PlayerMatchStat[]
+  confirmations Confirmation[]
+  resolution    DisputeResolution?
+
+  @@index([matchId])
+  @@index([status, verificationDeadline])
+  @@map("result_submission")
+}
+
+model PlayerMatchStat {
+  id              String           @id @default(cuid())
+  matchId         String
+  match           Match            @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  submissionId    String
+  submission      ResultSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  playerId        String
+  player          User             @relation(fields: [playerId], references: [id])
+  kills           Int
+  deaths          Int
+  plants          Int?
+  defuses         Int?
+  hillTimeSeconds Int?
+  verified        Boolean          @default(false)
+
+  @@unique([submissionId, playerId])
+  @@index([playerId, verified])
+  @@map("player_match_stat")
+}
+
+model Confirmation {
+  id              String               @id @default(cuid())
+  submissionId    String
+  submission      ResultSubmission     @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  playerId        String
+  player          User                 @relation(fields: [playerId], references: [id])
+  response        ConfirmationResponse
+  disputeReason   String?
+  correctedValues Json?
+  respondedAt     DateTime             @default(now())
+
+  @@unique([submissionId, playerId])
+  @@map("confirmation")
+}
+
+model DisputeResolution {
+  id           String           @id @default(cuid())
+  submissionId String           @unique
+  submission   ResultSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  resolvedById String
+  resolvedBy   User             @relation(fields: [resolvedById], references: [id])
+  outcome      SubmissionStatus // VERIFIED or REJECTED
+  reason       String
+  createdAt    DateTime         @default(now())
+
+  @@map("dispute_resolution")
+}
+
+// ───────────────────────────── Reputation (Phase 2) ─────────────────────────────
+
+model TeammateRating {
+  id             String   @id @default(cuid())
+  matchId        String
+  match          Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  raterId        String
+  rater          User     @relation("Rater", fields: [raterId], references: [id])
+  ratedId        String
+  rated          User     @relation("Rated", fields: [ratedId], references: [id])
+  wouldPlayAgain Boolean
+  communication  Int // 1-5
+  effort         Int // 1-5
+  createdAt      DateTime @default(now())
+
+  @@unique([matchId, raterId, ratedId])
+  @@index([ratedId])
+  @@map("teammate_rating")
+}
+
+model HosterReview {
+  id            String   @id @default(cuid())
+  eventId       String
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  reviewerId    String
+  reviewer      User     @relation(fields: [reviewerId], references: [id])
+  organization  Int // 1-5
+  communication Int // 1-5
+  fairness      Int // 1-5
+  comment       String?
+  hidden        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@unique([eventId, reviewerId])
+  @@map("hoster_review")
+}
+
+enum BadgeKind {
+  FOUNDER
+  ADMIN
+  MODERATOR
+  NEW_HOSTER
+  VERIFIED_HOSTER
+  TRUSTED_HOSTER
+  FOUNDING_HOSTER
+  VERIFIED_PLAYER
+  SUPPORTER
+}
+
+enum BadgeSource {
+  AUTOMATIC
+  GRANTED
+}
+
+model UserBadge {
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge       BadgeKind
+  source      BadgeSource @default(AUTOMATIC)
+  grantedById String?
+  createdAt   DateTime    @default(now())
+
+  @@id([userId, badge])
+  @@map("user_badge")
+}
+
+/// Pre-calculated per-user totals for fast profile loads. Recalculated by the worker.
+model ReputationSummary {
+  userId                  String   @id
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventsPlayed            Int      @default(0)
+  eventsHosted            Int      @default(0)
+  confirmedPayouts        Int      @default(0)
+  deniedPayouts           Int      @default(0)
+  noShows                 Int      @default(0)
+  verifiedMatches         Int      @default(0)
+  verifiedWins            Int      @default(0)
+  kills                   Int      @default(0)
+  deaths                  Int      @default(0)
+  plants                  Int      @default(0)
+  defuses                 Int      @default(0)
+  hillTimeSeconds         Int      @default(0)
+  ratingCount             Int      @default(0)
+  wouldPlayAgainPct       Float?
+  communicationAvg        Float?
+  effortAvg               Float?
+  confirmationsAsked      Int      @default(0)
+  confirmationsAnswered   Int      @default(0)
+  reviewCount             Int      @default(0)
+  organizationAvg         Float?
+  hosterCommunicationAvg  Float?
+  fairnessAvg             Float?
+  updatedAt               DateTime @updatedAt
+
+  @@map("reputation_summary")
+}
+
+// ───────────────────────────── Blacklist & appeals (Phase 2) ─────────────────────────────
+
+enum BlacklistStatus {
+  PROPOSED
+  AWAITING_SECOND_APPROVAL
+  ACTIVE
+  EXPIRED
+  REMOVED
+}
+
+model BlacklistEntry {
+  id            String          @id @default(cuid())
+  userId        String
+  user          User            @relation("BlacklistedUser", fields: [userId], references: [id])
+  category      ReportCategory
+  /// Carefully worded public text, e.g. "Verified report: unpaid winnings from X, evidence reviewed".
+  publicWording String
+  reportId      String?
+  report        Report?         @relation(fields: [reportId], references: [id])
+  status        BlacklistStatus @default(PROPOSED)
+  proposedById  String
+  proposedBy    User            @relation("BlacklistProposer", fields: [proposedById], references: [id])
+  expiresAt     DateTime?
+  activatedAt   DateTime?
+  removedAt     DateTime?
+  removedReason String?
+  createdAt     DateTime        @default(now())
+
+  approvals BlacklistApproval[]
+
+  @@index([userId, status])
+  @@index([status, expiresAt])
+  @@map("blacklist_entry")
+}
+
+model BlacklistApproval {
+  id          String         @id @default(cuid())
+  entryId     String
+  entry       BlacklistEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  staffUserId String
+  staffUser   User           @relation(fields: [staffUserId], references: [id])
+  createdAt   DateTime       @default(now())
+
+  @@unique([entryId, staffUserId])
+  @@map("blacklist_approval")
+}
+
+enum AppealTarget {
+  BLACKLIST_ENTRY
+  SANCTION
+  DISPUTE_RULING
+}
+
+enum AppealStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  UPHELD
+  OVERTURNED
+}
+
+model Appeal {
+  id             String       @id @default(cuid())
+  appellantId    String
+  appellant      User         @relation("Appellant", fields: [appellantId], references: [id])
+  target         AppealTarget
+  targetId       String
+  statement      String
+  evidence       Json         @default("[]")
+  status         AppealStatus @default(SUBMITTED)
+  handledById    String?
+  handledBy      User?        @relation("AppealHandler", fields: [handledById], references: [id])
+  decisionReason String?
+  decidedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@unique([appellantId, target, targetId])
+  @@index([status])
+  @@map("appeal")
 }
 
 // ───────────────────────────── Notifications & System ─────────────────────────────

@@ -8,6 +8,7 @@ import {
   issueSanctionAction,
   transitionReportAction,
 } from "@/app/(site)/staff/actions";
+import { proposeEntryAction } from "@/app/(site)/staff/blacklist/actions";
 import type { ActionResult } from "@/lib/actions";
 import type { EvidenceInput } from "@/app/(site)/report/actions";
 import { FormMessage } from "@/components/form-message";
@@ -30,6 +31,10 @@ interface Props {
   staffRole: StaffRole;
   uploads: boolean;
   notes: { id: string; body: string; author: string; at: string }[];
+  category: string;
+  eventTitle: string | null;
+  accusedResponded: boolean;
+  responseWindowPassed: boolean;
 }
 
 export function ReportActions(p: Props) {
@@ -43,6 +48,11 @@ export function ReportActions(p: Props) {
   const [days, setDays] = useState(7);
   const [evidence, setEvidence] = useState<EvidenceInput[]>([]);
   const [note, setNote] = useState("");
+  const [wording, setWording] = useState(
+    p.eventTitle
+      ? `Verified report: ${p.category.toLowerCase().replace(/_/g, " ")} in "${p.eventTitle}", evidence reviewed by staff.`
+      : `Verified report: ${p.category.toLowerCase().replace(/_/g, " ")}, evidence reviewed by staff.`,
+  );
 
   const next = reportMachine.table[p.status];
   const closed = p.status === "ACTIONED" || p.status === "DISMISSED";
@@ -151,6 +161,51 @@ export function ReportActions(p: Props) {
             }
           >
             Issue {sanctionType.toLowerCase().replace("_", " ")}
+          </button>
+        </section>
+      )}
+
+      {(p.status === "UNDER_REVIEW" || p.status === "ACTIONED") && (
+        <section className="card space-y-2 text-sm">
+          <h2 className="font-semibold">Propose public blacklist entry</h2>
+          <p className="text-xs text-muted">
+            Goes public only after a second, different moderator approves. Wording must describe a
+            verified report, not label the person.
+            {!(p.accusedResponded || p.responseWindowPassed) && (
+              <span className="text-warn">
+                {" "}
+                The accused has not yet had their chance to respond.
+              </span>
+            )}
+          </p>
+          <textarea
+            className="input"
+            rows={3}
+            value={wording}
+            onChange={(e) => setWording(e.target.value)}
+          />
+          <button
+            className="btn btn-danger w-full justify-center"
+            disabled={
+              pending ||
+              reason.length < 10 ||
+              wording.length < 20 ||
+              !(p.accusedResponded || p.responseWindowPassed)
+            }
+            onClick={() =>
+              confirm("Propose this entry for a second moderator's approval?") &&
+              run(() =>
+                proposeEntryAction({
+                  userId: p.accusedId,
+                  category: p.category,
+                  publicWording: wording,
+                  reportId: p.reportId,
+                  reason,
+                }),
+              )
+            }
+          >
+            Propose entry
           </button>
         </section>
       )}

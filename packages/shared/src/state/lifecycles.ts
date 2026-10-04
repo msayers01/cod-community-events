@@ -1,4 +1,13 @@
-import { EventStatus, RegistrationStatus, RoundStatus, ReportStatus } from "../enums.js";
+import {
+  AppealStatus,
+  BlacklistStatus,
+  EventStatus,
+  MatchStatus,
+  RegistrationStatus,
+  ReportStatus,
+  RoundStatus,
+  SubmissionStatus,
+} from "../enums.js";
 import { createMachine } from "./machine.js";
 
 export const eventMachine = createMachine<EventStatus>("Event", {
@@ -44,3 +53,36 @@ export const OCCUPYING_STATUSES: readonly RegistrationStatus[] = [
   RegistrationStatus.CHECKED_IN,
   RegistrationStatus.IN_POOL,
 ];
+
+export const submissionMachine = createMachine<SubmissionStatus>("ResultSubmission", {
+  PENDING: ["VERIFIED", "DISPUTED", "UNCONFIRMED"],
+  DISPUTED: ["UNDER_REVIEW"],
+  UNCONFIRMED: ["UNDER_REVIEW", "VERIFIED"],
+  UNDER_REVIEW: ["VERIFIED", "REJECTED"],
+  VERIFIED: [],
+  REJECTED: [],
+});
+
+export const matchMachine = createMachine<MatchStatus>("Match", {
+  SCHEDULED: ["RESULT_PENDING"],
+  RESULT_PENDING: ["VERIFIED", "DISPUTED", "UNDER_REVIEW"],
+  DISPUTED: ["UNDER_REVIEW"],
+  UNDER_REVIEW: ["VERIFIED", "REJECTED"],
+  REJECTED: ["RESULT_PENDING"],
+  VERIFIED: [],
+});
+
+export const blacklistMachine = createMachine<BlacklistStatus>("BlacklistEntry", {
+  PROPOSED: ["AWAITING_SECOND_APPROVAL", "REMOVED"],
+  AWAITING_SECOND_APPROVAL: ["ACTIVE", "REMOVED"],
+  ACTIVE: ["EXPIRED", "REMOVED"],
+  EXPIRED: [],
+  REMOVED: [],
+});
+
+export const appealMachine = createMachine<AppealStatus>("Appeal", {
+  SUBMITTED: ["UNDER_REVIEW"],
+  UNDER_REVIEW: ["UPHELD", "OVERTURNED"],
+  UPHELD: [],
+  OVERTURNED: [],
+});

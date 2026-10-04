@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 import { UserMenu } from "@/components/user-menu";
 import { unreadCount } from "@/modules/notifications/service";
 import { pendingPayoutsFor } from "@/modules/reputation/service";
+import { pendingConfirmationsFor } from "@/modules/matches/service";
 
 export const metadata: Metadata = {
   title: { default: "CoD Community Events", template: "%s · CoD Community Events" },
@@ -13,9 +14,13 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
-  const [unread, pendingPayouts] = user
-    ? await Promise.all([unreadCount(user.id), pendingPayoutsFor(user.id)])
-    : [0, []];
+  const [unread, pendingPayouts, pendingConfirmations] = user
+    ? await Promise.all([
+        unreadCount(user.id),
+        pendingPayoutsFor(user.id),
+        pendingConfirmationsFor(user.id),
+      ])
+    : [0, [], []];
   return (
     <html lang="en">
       <body className="min-h-screen">
@@ -24,6 +29,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="flex items-center gap-6">
               <Link href="/" className="font-semibold tracking-tight">
                 <span className="text-accent">●</span> CoD Community Events
+              </Link>
+              <Link href="/blacklist" className="text-sm text-muted hover:text-ink">
+                Verified reports
               </Link>
               <Link href="/?startingSoon=true" className="text-sm text-muted hover:text-ink">
                 Starting soon
@@ -51,6 +59,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               }
               unread={unread}
               pendingPayouts={pendingPayouts.length}
+              pendingConfirmations={pendingConfirmations.length}
             />
           </nav>
         </header>

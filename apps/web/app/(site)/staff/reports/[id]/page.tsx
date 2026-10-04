@@ -150,6 +150,10 @@ export default async function StaffReportPage({ params }: { params: Promise<{ id
             author: n.author.displayName,
             at: n.createdAt.toISOString(),
           }))}
+          category={report.category}
+          eventTitle={report.event?.title ?? null}
+          accusedResponded={!!report.respondedAt}
+          responseWindowPassed={!!report.responseDeadline && report.responseDeadline < new Date()}
         />
       </aside>
     </div>

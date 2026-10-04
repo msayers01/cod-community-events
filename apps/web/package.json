@@ -23,7 +23,8 @@
     "socket.io-client": "^4.8.4",
     "@aws-sdk/client-s3": "^3.900.0",
     "@aws-sdk/s3-request-presigner": "^3.900.0",
-    "@sentry/nextjs": "^11.4.0"
+    "@sentry/nextjs": "^11.4.0",
+    "@cod/core": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

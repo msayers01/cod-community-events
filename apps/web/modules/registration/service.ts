@@ -1,6 +1,7 @@
 import { prisma, emit, type Prisma } from "@cod/db";
 import {
   canManageEvent,
+  entryRequirementsSchema,
   registrationMachine,
   OCCUPYING_STATUSES,
   type Actor,
@@ -63,7 +64,36 @@ export async function register(userId: string, eventId: string, source: SignupSo
     if (existing?.status === "REMOVED")
       throw new DomainError("REMOVED", "The hoster removed you from this event");
 
-    const flagged = !!(await tx.sanction.findFirst({ where: { userId, type: "WARNING" } }));
+    if (event.entryType === "REQUIREMENT_BASED" && event.entryRequirements) {
+      const req = entryRequirementsSchema.parse(event.entryRequirements);
+      const [completed, openReports, linked] = await Promise.all([
+        tx.registration.count({
+          where: {
+            playerId: userId,
+            status: "IN_POOL",
+            event: { status: { in: ["COMPLETED", "ARCHIVED"] } },
+          },
+        }),
+        tx.report.count({ where: { reportedUserId: userId, status: { notIn: ["DISMISSED"] } } }),
+        tx.account.count({ where: { userId, providerId: "discord" } }),
+      ]);
+      if (completed < req.minCompletedEvents)
+        throw new DomainError(
+          "REQUIREMENTS",
+          `This event requires ${req.minCompletedEvents} completed events (you have ${completed})`,
+        );
+      if (req.noOpenReports && openReports > 0)
+        throw new DomainError("REQUIREMENTS", "This event requires no open reports against you");
+      if (req.requireLinkedDiscord && linked === 0)
+        throw new DomainError("REQUIREMENTS", "This event requires a linked Discord account");
+    }
+
+    // Flag for the hoster: active blacklist entry or a prior warning.
+    const [activeBlacklist, warned] = await Promise.all([
+      tx.blacklistEntry.count({ where: { userId, status: "ACTIVE" } }),
+      tx.sanction.count({ where: { userId, type: "WARNING" } }),
+    ]);
+    const flagged = activeBlacklist > 0 || warned > 0;
     const data = {
       status: "WAITLISTED" as const,
       source,
@@ -219,5 +249,52 @@ async function renumberWaitlist(tx: Tx, eventId: string) {
 export async function myRegistration(userId: string, eventId: string) {
   return prisma.registration.findUnique({
     where: { eventId_playerId: { eventId, playerId: userId } },
+  });
+}
+
+/** Invite-only events: the hoster invites players by display name or Activision ID. */
+export async function invite(actor: Actor, eventId: string, identifier: string) {
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event) throw new NotFoundError("Event");
+  if (!canManageEvent(actor, { hosterUserId: event.hosterId })) throw new ForbiddenError();
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { displayName: { equals: identifier, mode: "insensitive" } },
+        { activisionId: { equals: identifier, mode: "insensitive" } },
+      ],
+    },
+  });
+  if (!user) throw new DomainError("USER_NOT_FOUND", `No player matches "${identifier}"`);
+  return prisma.$transaction(async (tx) => {
+    const inv = await tx.eventInvite.upsert({
+      where: { eventId_invitedUserId: { eventId, invitedUserId: user.id } },
+      update: {},
+      create: { eventId, invitedUserId: user.id },
+    });
+    await tx.notification.create({
+      data: {
+        userId: user.id,
+        type: "invite",
+        title: `You're invited to ${event.title}`,
+        body: "Sign up from the event page.",
+        href: `/events/${event.slug}`,
+      },
+    });
+    return inv;
+  });
+}
+
+export async function listInvites(actor: Actor, eventId: string) {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { hosterId: true },
+  });
+  if (!event) throw new NotFoundError("Event");
+  if (!canManageEvent(actor, { hosterUserId: event.hosterId })) throw new ForbiddenError();
+  return prisma.eventInvite.findMany({
+    where: { eventId },
+    include: { invitedUser: { select: { displayName: true } } },
+    orderBy: { createdAt: "asc" },
   });
 }

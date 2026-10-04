@@ -40,6 +40,7 @@ export default async function ManageEventPage({ params }: { params: Promise<{ id
           },
         },
       },
+      invites: { include: { invitedUser: { select: { displayName: true } } } },
       payoutConfirmations: {
         include: { winner: { select: { displayName: true } } },
         orderBy: { place: "asc" },
@@ -47,6 +48,7 @@ export default async function ManageEventPage({ params }: { params: Promise<{ id
       rounds: {
         orderBy: { roundNumber: "asc" },
         include: {
+          _count: { select: { matches: true } },
           spin: { select: { id: true, status: true, commitment: true, spunAt: true } },
           teams: { include: { members: { include: { user: { select: { displayName: true } } } } } },
         },
@@ -56,6 +58,12 @@ export default async function ManageEventPage({ params }: { params: Promise<{ id
   if (!event) notFound();
   if (!canManageEvent(user.actor, { hosterUserId: event.hosterId })) notFound();
 
+  const openDisputes = await prisma.resultSubmission.count({
+    where: {
+      status: { in: ["DISPUTED", "UNCONFIRMED", "UNDER_REVIEW"] },
+      match: { round: { eventId: id } },
+    },
+  });
   const paid = event.registrations.filter((r) =>
     ["CONFIRMED", "CHECKED_IN", "IN_POOL", "NO_SHOW"].includes(r.status),
   );
@@ -104,12 +112,20 @@ export default async function ManageEventPage({ params }: { params: Promise<{ id
             response: p.response,
           })),
           winnersRecorded: !!event.winnersRecordedAt,
+          slug: event.slug,
+          entryType: event.entryType,
+          invites: event.invites.map((i) => ({
+            displayName: i.invitedUser.displayName,
+            status: i.status,
+          })),
+          openDisputes,
         }}
         rounds={event.rounds.map((r) => ({
           id: r.id,
           roundNumber: r.roundNumber,
           status: r.status,
           spin: r.spin,
+          matchCount: r._count.matches,
           teams: r.teams.map((t) => ({
             label: t.label,
             members: t.members.map((m) => m.user.displayName),
