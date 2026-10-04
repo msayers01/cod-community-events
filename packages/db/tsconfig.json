@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist", "rootDir": ".", "declaration": true },
+  "include": ["src", "generated"],
+  "exclude": ["dist", "prisma"]
+}

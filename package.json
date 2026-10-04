@@ -1,0 +1,36 @@
+{
+  "name": "cod-community-events",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:generate": "pnpm --filter @cod/db generate",
+    "db:migrate": "pnpm --filter @cod/db migrate:dev",
+    "db:deploy": "pnpm --filter @cod/db migrate:deploy",
+    "db:seed": "pnpm --filter @cod/db seed",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "turbo": "^2.11.7",
+    "typescript": "^6.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/engines",
+      "prisma",
+      "esbuild",
+      "sharp",
+      "@tailwindcss/oxide",
+      "unrs-resolver"
+    ]
+  }
+}

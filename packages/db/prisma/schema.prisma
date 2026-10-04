@@ -1,0 +1,614 @@
+// Phase 1 schema. Organized by module; each model belongs to exactly one module.
+// See docs/03-data-model.md.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+  runtime  = "nodejs"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────── Identity ─────────────────────────────
+
+enum AccountStatus {
+  ACTIVE
+  WARNED
+  SUSPENDED
+  BANNED
+}
+
+enum StaffRoleKind {
+  TRIAL_MODERATOR
+  MODERATOR
+  ADMIN
+  FOUNDER
+}
+
+model User {
+  id            String        @id @default(cuid())
+  // Better Auth core fields
+  name          String
+  email         String        @unique
+  emailVerified Boolean       @default(false)
+  image         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  // Platform fields
+  displayName   String        @unique
+  activisionId  String?
+  streamUrl     String?
+  bio           String        @default("")
+  status        AccountStatus @default(ACTIVE)
+
+  sessions          Session[]
+  accounts          Account[]
+  staffRole         StaffRole?
+  conflicts         ConflictDeclaration[] @relation("StaffConflicts")
+  conflictedBy      ConflictDeclaration[] @relation("ConflictedUser")
+  hosterProfile     HosterProfile?
+  registrations     Registration[]
+  teamMemberships   RoundTeamMember[]
+  spinsTriggered    Spin[]
+  reportsFiled      Report[]              @relation("Reporter")
+  reportsReceived   Report[]              @relation("Reported")
+  reportsAssigned   Report[]              @relation("AssignedStaff")
+  evidence          Evidence[]
+  sanctions         Sanction[]            @relation("SanctionedUser")
+  sanctionsIssued   Sanction[]            @relation("SanctionIssuer")
+  staffNotes        StaffNote[]           @relation("NoteSubject")
+  staffNotesWritten StaffNote[]           @relation("NoteAuthor")
+  staffActions      StaffActionLog[]
+  notifications     Notification[]
+  invitesReceived   EventInvite[]
+  payoutConfirmations PayoutConfirmation[]
+  registrationsMarkedPaid Registration[] @relation("MarkedPaidBy")
+  discordConfigs    DiscordServerConfig[]
+
+  @@map("user")
+}
+
+// Better Auth session table
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+// Better Auth account table = "Linked Account" in the data model (Discord, Twitch, X).
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String // platform account id
+  providerId            String // discord | twitch | twitter
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  // Platform handle at link time, for duplicate/alt detection and display.
+  handle                String?
+
+  @@unique([providerId, accountId])
+  @@unique([providerId, userId])
+  @@index([userId])
+  @@map("account")
+}
+
+// Better Auth verification table
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model StaffRole {
+  userId      String        @id
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        StaffRoleKind
+  badgeHidden Boolean       @default(false)
+  grantedById String?
+  grantedAt   DateTime      @default(now())
+
+  @@map("staff_role")
+}
+
+model ConflictDeclaration {
+  id               String   @id @default(cuid())
+  staffUserId      String
+  staffUser        User     @relation("StaffConflicts", fields: [staffUserId], references: [id], onDelete: Cascade)
+  conflictedUserId String
+  conflictedUser   User     @relation("ConflictedUser", fields: [conflictedUserId], references: [id], onDelete: Cascade)
+  note             String   @default("")
+  createdAt        DateTime @default(now())
+
+  @@unique([staffUserId, conflictedUserId])
+  @@map("conflict_declaration")
+}
+
+// ───────────────────────────── Events ─────────────────────────────
+
+enum HosterTier {
+  NEW
+  VERIFIED
+  TRUSTED
+}
+
+enum GameMode {
+  SND
+  HARDPOINT
+}
+
+enum EventFormat {
+  SWITCHEROO
+  STANDARD
+}
+
+enum EntryType {
+  OPEN
+  REQUIREMENT_BASED
+  INVITE_ONLY
+}
+
+enum Platform {
+  PC
+  PLAYSTATION
+  XBOX
+  CROSSPLAY
+}
+
+enum Region {
+  NA_EAST
+  NA_WEST
+  EU
+  OCE
+  OTHER
+}
+
+enum EventStatus {
+  DRAFT
+  OPEN
+  CHECK_IN
+  LIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+  CANCELLED
+}
+
+model HosterProfile {
+  userId         String     @id
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier           HosterTier @default(NEW)
+  tierSetManually Boolean   @default(false)
+  foundingHoster Boolean    @default(false)
+  twitterHandle  String?
+  discordInvite  String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  events    Event[]
+  templates EventTemplate[]
+
+  @@map("hoster_profile")
+}
+
+model EventTemplate {
+  id          String        @id @default(cuid())
+  hosterId    String
+  hoster      HosterProfile @relation(fields: [hosterId], references: [userId], onDelete: Cascade)
+  name        String
+  settings    Json // validated by createEventSchema minus times
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([hosterId, name])
+  @@map("event_template")
+}
+
+model Event {
+  id                String        @id @default(cuid())
+  hosterId          String
+  hoster            HosterProfile @relation(fields: [hosterId], references: [userId])
+  title             String
+  slug              String        @unique
+  description       String        @default("")
+  mode              GameMode
+  format            EventFormat
+  teamSize          Int
+  roundCount        Int?
+  playerCap         Int
+  entryFeeCents     Int           @default(0)
+  currency          String        @default("USD")
+  payoutSplit       Json
+  region            Region
+  platform          Platform
+  rules             Json
+  entryType         EntryType     @default(OPEN)
+  entryRequirements Json?
+  startsAt          DateTime
+  checkInOpensAt    DateTime
+  checkInClosesAt   DateTime
+  status            EventStatus   @default(DRAFT)
+  joinCode          String        @unique
+  overlayKey        String        @unique
+  publishedAt       DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  cancelReason      String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  registrations       Registration[]
+  invites             EventInvite[]
+  rounds              Round[]
+  spins               Spin[]
+  reports             Report[]
+  payoutConfirmations PayoutConfirmation[]
+
+  @@index([status, startsAt])
+  @@index([hosterId])
+  @@map("event")
+}
+
+// ───────────────────────────── Registration ─────────────────────────────
+
+enum RegistrationStatus {
+  WAITLISTED
+  CONFIRMED
+  CHECKED_IN
+  IN_POOL
+  NO_SHOW
+  WITHDRAWN
+  REMOVED
+}
+
+enum SignupSource {
+  WEBSITE
+  JOIN_LINK
+  QUICK_ADD
+}
+
+model Registration {
+  id               String             @id @default(cuid())
+  eventId          String
+  event            Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  playerId         String
+  player           User               @relation(fields: [playerId], references: [id])
+  status           RegistrationStatus @default(WAITLISTED)
+  source           SignupSource       @default(WEBSITE)
+  waitlistPosition Int?
+  markedPaidById   String?
+  markedPaidBy     User?              @relation("MarkedPaidBy", fields: [markedPaidById], references: [id])
+  markedPaidAt     DateTime?
+  checkedInAt      DateTime?
+  removedReason    String?
+  blacklistFlagged Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@unique([eventId, playerId])
+  @@index([eventId, status])
+  @@index([playerId])
+  @@map("registration")
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+model EventInvite {
+  id            String       @id @default(cuid())
+  eventId       String
+  event         Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  invitedUserId String
+  invitedUser   User         @relation(fields: [invitedUserId], references: [id], onDelete: Cascade)
+  status        InviteStatus @default(PENDING)
+  createdAt     DateTime     @default(now())
+  respondedAt   DateTime?
+
+  @@unique([eventId, invitedUserId])
+  @@map("event_invite")
+}
+
+// ───────────────────────────── Wheel ─────────────────────────────
+
+enum SpinStatus {
+  COMMITTED
+  SPUN
+  REVEALED
+}
+
+model Spin {
+  id            String     @id @default(cuid())
+  eventId       String
+  event         Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  roundId       String     @unique
+  round         Round      @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  /// Canonical pool snapshot: { playerIds: string[], teamSize: number }
+  pool          Json
+  poolHash      String
+  commitment    String
+  /// Encrypted-at-rest is a later concern; null until revealed in public reads.
+  secret        String
+  revealedSecret String?
+  result        Json?
+  status        SpinStatus @default(COMMITTED)
+  triggeredById String
+  triggeredBy   User       @relation(fields: [triggeredById], references: [id])
+  committedAt   DateTime   @default(now())
+  spunAt        DateTime?
+  revealedAt    DateTime?
+
+  @@index([eventId])
+  @@map("spin")
+}
+
+// ───────────────────────────── Matches (Phase 1 subset) ─────────────────────────────
+
+enum RoundStatus {
+  PENDING
+  SPUN
+  IN_PROGRESS
+  COMPLETE
+}
+
+model Round {
+  id          String      @id @default(cuid())
+  eventId     String
+  event       Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  roundNumber Int
+  status      RoundStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+
+  spin  Spin?
+  teams RoundTeam[]
+
+  @@unique([eventId, roundNumber])
+  @@map("round")
+}
+
+model RoundTeam {
+  id      String            @id @default(cuid())
+  roundId String
+  round   Round             @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  label   String
+  members RoundTeamMember[]
+
+  @@unique([roundId, label])
+  @@map("round_team")
+}
+
+model RoundTeamMember {
+  teamId String
+  team   RoundTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId String
+  user   User      @relation(fields: [userId], references: [id])
+
+  @@id([teamId, userId])
+  @@map("round_team_member")
+}
+
+// ───────────────────────────── Reputation (Phase 1 subset) ─────────────────────────────
+
+enum PayoutResponse {
+  PAID
+  NOT_PAID
+  NO_RESPONSE
+}
+
+model PayoutConfirmation {
+  id          String          @id @default(cuid())
+  eventId     String
+  event       Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  winnerId    String
+  winner      User            @relation(fields: [winnerId], references: [id])
+  place       Int
+  response    PayoutResponse  @default(NO_RESPONSE)
+  deadline    DateTime
+  respondedAt DateTime?
+  createdAt   DateTime        @default(now())
+
+  @@unique([eventId, winnerId])
+  @@map("payout_confirmation")
+}
+
+// ───────────────────────────── Moderation ─────────────────────────────
+
+enum ReportCategory {
+  NON_PAYMENT
+  CHEATING
+  THROWING
+  REPEATED_NO_SHOWS
+  HARASSMENT
+  FALSIFIED_RESULTS
+}
+
+enum ReportStatus {
+  SUBMITTED
+  GATHERING_EVIDENCE
+  AWAITING_RESPONSE
+  UNDER_REVIEW
+  ACTIONED
+  DISMISSED
+}
+
+model Report {
+  id              String         @id @default(cuid())
+  reporterId      String
+  reporter        User           @relation("Reporter", fields: [reporterId], references: [id])
+  reportedUserId  String
+  reportedUser    User           @relation("Reported", fields: [reportedUserId], references: [id])
+  eventId         String?
+  event           Event?         @relation(fields: [eventId], references: [id])
+  matchId         String?
+  category        ReportCategory
+  description     String
+  status          ReportStatus   @default(SUBMITTED)
+  assignedStaffId String?
+  assignedStaff   User?          @relation("AssignedStaff", fields: [assignedStaffId], references: [id])
+  accusedResponse String?
+  respondedAt     DateTime?
+  resolvedAt      DateTime?
+  resolution      String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  evidence  Evidence[]
+  sanctions Sanction[]
+
+  @@index([reportedUserId])
+  @@index([status])
+  @@map("report")
+}
+
+enum EvidenceType {
+  SCREENSHOT
+  VOD
+  PAYMENT_RECORD
+  OTHER
+}
+
+model Evidence {
+  id            String       @id @default(cuid())
+  reportId      String
+  report        Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  type          EvidenceType
+  url           String
+  note          String       @default("")
+  submittedById String
+  submittedBy   User         @relation(fields: [submittedById], references: [id])
+  createdAt     DateTime     @default(now())
+
+  @@map("evidence")
+}
+
+enum SanctionType {
+  WARNING
+  SUSPENSION
+  PERMANENT_BAN
+}
+
+model Sanction {
+  id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation("SanctionedUser", fields: [userId], references: [id])
+  type       SanctionType
+  reason     String
+  startsAt   DateTime     @default(now())
+  endsAt     DateTime?
+  reportId   String?
+  report     Report?      @relation(fields: [reportId], references: [id])
+  issuedById String
+  issuedBy   User         @relation("SanctionIssuer", fields: [issuedById], references: [id])
+  createdAt  DateTime     @default(now())
+
+  @@index([userId])
+  @@map("sanction")
+}
+
+model StaffNote {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("NoteSubject", fields: [userId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation("NoteAuthor", fields: [authorId], references: [id])
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("staff_note")
+}
+
+/// Append-only. A database trigger (see migration 0001) rejects UPDATE and DELETE.
+model StaffActionLog {
+  id          String   @id @default(cuid())
+  staffUserId String
+  staffUser   User     @relation(fields: [staffUserId], references: [id])
+  action      String
+  targetType  String
+  targetId    String
+  reason      String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([targetType, targetId])
+  @@index([staffUserId])
+  @@map("staff_action_log")
+}
+
+// ───────────────────────────── Notifications & System ─────────────────────────────
+
+model Notification {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String
+  title      String
+  body       String    @default("")
+  href       String?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@map("notification")
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+model OutboxEvent {
+  id          String       @id @default(cuid())
+  type        String
+  payload     Json
+  status      OutboxStatus @default(PENDING)
+  attempts    Int          @default(0)
+  lastError   String?
+  createdAt   DateTime     @default(now())
+  processedAt DateTime?
+
+  @@index([status, createdAt])
+  @@map("outbox_event")
+}
+
+model DiscordServerConfig {
+  id             String   @id @default(cuid())
+  guildId        String
+  channelId      String
+  filters        Json     @default("{}")
+  configuredById String
+  configuredBy   User     @relation(fields: [configuredById], references: [id])
+  createdAt      DateTime @default(now())
+
+  @@unique([guildId, channelId])
+  @@map("discord_server_config")
+}

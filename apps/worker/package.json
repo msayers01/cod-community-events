@@ -1,0 +1,26 @@
+{
+  "name": "@cod/worker",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "echo skip",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@cod/db": "workspace:*",
+    "@cod/shared": "workspace:*",
+    "bullmq": "^5.0.0",
+    "ioredis": "^5.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0"
+  }
+}
