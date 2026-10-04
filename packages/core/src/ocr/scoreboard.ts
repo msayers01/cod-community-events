@@ -51,7 +51,7 @@ const IGNORED_LABELS = new Set([
   "ACCURACY",
 ]);
 
-type Column = StatField | null;
+export type Column = StatField | null;
 
 const MAX_STAT = 500;
 const MAX_HILL_SECONDS = 36_000;
@@ -115,15 +115,22 @@ export function parseScoreboard(text: string): { columns: StatField[]; rows: Sco
     .filter(Boolean);
   const header = findHeader(lines);
   if (!header) return { columns: [], rows: [] };
+  return {
+    columns: header.columns.filter((c): c is StatField => c !== null),
+    rows: parseRows(lines.slice(header.index + 1), header.columns),
+  };
+}
 
+/** Read "name n n n" lines against a known column order (null = a column we don't track). */
+export function parseRows(lines: readonly string[], columns: readonly Column[]): ScoreboardRow[] {
   const rows: ScoreboardRow[] = [];
-  for (const line of lines.slice(header.index + 1)) {
+  for (const line of lines) {
     const tokens = line.split(/\s+/);
     // The longest run of numbers at the end of the line; extra leading numbers belong to the name.
     let start = tokens.length;
     while (start > 0 && parseNumeric(tokens[start - 1]!) !== null) start--;
     const numbers = tokens.slice(start).map((t) => parseNumeric(t)!);
-    const n = header.columns.length;
+    const n = columns.length;
     if (numbers.length < n) continue;
     const values = numbers.slice(numbers.length - n);
     const name = [...tokens.slice(0, start), ...numbers.slice(0, numbers.length - n).map(String)]
@@ -133,7 +140,7 @@ export function parseScoreboard(text: string): { columns: StatField[]; rows: Sco
 
     const stats: ReadStats = {};
     let sane = true;
-    header.columns.forEach((col, i) => {
+    columns.forEach((col, i) => {
       if (!col) return;
       const v = values[i]!;
       if (v > (col === "hillTimeSeconds" ? MAX_HILL_SECONDS : MAX_STAT)) sane = false;
@@ -141,7 +148,158 @@ export function parseScoreboard(text: string): { columns: StatField[]; rows: Sco
     });
     if (sane) rows.push({ rawName: name, stats });
   }
-  return { columns: header.columns.filter((c): c is StatField => c !== null), rows };
+  return rows;
+}
+
+// ───────────── Word positions ─────────────
+
+export interface OcrWord {
+  text: string;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/**
+ * Rebuild text lines from positioned words. Sparse-text OCR emits each cell of a table
+ * as its own line, so rows have to be reassembled from where the words sit.
+ */
+export function linesFromWords(words: readonly OcrWord[]): string[] {
+  const usable = words.filter((w) => w.text.trim() && w.y1 > w.y0);
+  if (usable.length === 0) return [];
+  const heights = usable.map((w) => w.y1 - w.y0).sort((a, b) => a - b);
+  const tolerance = heights[Math.floor(heights.length / 2)]! * 0.6;
+  const byY = [...usable].sort((a, b) => a.y0 + a.y1 - (b.y0 + b.y1));
+  const lines: OcrWord[][] = [];
+  for (const w of byY) {
+    const mid = (w.y0 + w.y1) / 2;
+    const line = lines.find((l) => {
+      const m = l.reduce((sum, x) => sum + (x.y0 + x.y1) / 2, 0) / l.length;
+      return Math.abs(m - mid) <= tolerance;
+    });
+    if (line) line.push(w);
+    else lines.push([w]);
+  }
+  return lines
+    .sort((a, b) => a[0]!.y0 - b[0]!.y0)
+    .map((l) =>
+      l
+        .sort((a, b) => a.x0 - b.x0)
+        .map((w) => w.text.trim())
+        .join(" "),
+    );
+}
+
+/**
+ * Hardpoint team table: "RANK PLAYER SCORE OBJ. SCORE TIME". Only time on the hill is a stat
+ * we track; score and objective score are read past so the columns line up.
+ */
+export const HARDPOINT_TABLE_COLUMNS: Column[] = [null, null, "hillTimeSeconds"];
+
+// ───────────── The "my stats" panel ─────────────
+
+export interface PanelReading {
+  /** The 6-8 digit id after the # in the player's name, if read. */
+  idDigits: string | null;
+  /** The name before the #, if read. */
+  name: string | null;
+  kills: number | null;
+  deaths: number | null;
+  ratio: number | null;
+  /** True when a number was rebuilt from the other two because the read value was missing or disagreed. */
+  repaired: boolean;
+}
+
+function numberBelow(label: OcrWord, words: readonly OcrWord[]): number | null {
+  const cx = (label.x0 + label.x1) / 2;
+  const reach = (label.x1 - label.x0) * 0.75;
+  const below = words
+    .filter((w) => w.y0 >= label.y1 - 4 && Math.abs((w.x0 + w.x1) / 2 - cx) <= reach)
+    .map((w) => ({
+      w,
+      v: /^\d+([.,]\d+)?$/.test(w.text) ? Number(w.text.replace(",", ".")) : null,
+    }))
+    .filter((x): x is { w: OcrWord; v: number } => x.v !== null)
+    .sort((a, b) => a.w.y0 - b.w.y0);
+  return below[0]?.v ?? null;
+}
+
+/**
+ * Read the stats card the game shows for the player who took the screenshot:
+ * ELIMINATIONS, DEATHS and ELIM/D RATIO sit above their values. The ratio is redundant
+ * with the other two, so we use it as a check, and to rebuild a digit OCR dropped.
+ */
+export function parsePanel(words: readonly OcrWord[]): PanelReading | null {
+  const find = (re: RegExp) => words.find((w) => re.test(w.text.replace(/[^A-Za-z/]/g, "")));
+  const elim = find(/^ELIMINATIONS$/i);
+  const deaths = find(/^DEATHS$/i);
+  const ratioLabel = find(/^ELIM\/?D$/i);
+  if (!elim || !deaths) return null;
+
+  let kills = numberBelow(elim, words);
+  let death = numberBelow(deaths, words);
+  let ratio = ratioLabel ? numberBelow(ratioLabel, words) : null;
+  // OCR often drops the decimal point: "273" is 2.73.
+  if (ratio !== null && Number.isInteger(ratio) && ratio >= 10) ratio /= 100;
+  let repaired = false;
+  if (ratio !== null && ratio > 0) {
+    const r = ratio;
+    const fits = (k: number | null, d: number | null) =>
+      k !== null && d !== null && d > 0 && Math.abs(k / d - r) <= 0.0051;
+    if (!fits(kills, death)) {
+      // One number is missing or wrong. The ratio can rebuild it, but only when that is unambiguous.
+      const k = death !== null ? Math.round(r * death) : null;
+      const d = kills !== null ? Math.round(kills / r) : null;
+      const killsFixable = fits(k, death) && (kills === null || death !== null);
+      const deathsFixable = fits(kills, d) && (death === null || kills !== null);
+      if (killsFixable && !deathsFixable) {
+        kills = k;
+        repaired = true;
+      } else if (deathsFixable && !killsFixable) {
+        death = d;
+        repaired = true;
+      }
+    }
+  }
+  const id = words.find((w) => /#\d{4,}/.test(w.text));
+  const idMatch = id ? /^(.*?)#(\d{4,})/.exec(id.text) : null;
+  return {
+    idDigits: idMatch?.[2] ?? null,
+    name: idMatch?.[1] ? idMatch[1] : null,
+    kills,
+    deaths: death,
+    ratio,
+    repaired,
+  };
+}
+
+/** A panel is only trusted when kills, deaths and the ratio agree with each other. */
+export function panelIsConsistent(
+  p: PanelReading,
+): p is PanelReading & { kills: number; deaths: number } {
+  if (p.kills === null || p.deaths === null) return false;
+  if (p.ratio === null || p.deaths === 0) return false;
+  return Math.abs(p.kills / p.deaths - p.ratio) <= 0.0051;
+}
+
+/** Which player the panel belongs to: exact id digits first, then a close name. */
+export function panelOwner(
+  panel: PanelReading,
+  players: readonly { playerId: string; names: readonly string[]; activisionId?: string | null }[],
+): string | null {
+  if (panel.idDigits) {
+    const byId = players.filter((p) => p.activisionId?.endsWith(`#${panel.idDigits}`));
+    if (byId.length === 1) return byId[0]!.playerId;
+  }
+  if (panel.name) {
+    const m = matchRows(
+      [{ rawName: panel.name, stats: {} }],
+      players.map((p) => ({ playerId: p.playerId, names: p.names })),
+    )[0];
+    return m?.playerId ?? null;
+  }
+  return null;
 }
 
 // ───────────── Matching rows to players ─────────────

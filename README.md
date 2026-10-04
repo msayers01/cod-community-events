@@ -124,13 +124,22 @@ the accused's right to respond. Flags are never shown to the player, never on a 
 thresholds live only in `thresholds.ts`, which is not exported from the package. Recusal applies.
 
 **Screenshot reading** (`packages/core/src/ocr`, `apps/worker`). Submitting a result queues a reading;
-the worker runs Tesseract on the screenshot, finds the scoreboard's header row, and reads each player's
-row against the column order the header gives. The reading is advisory only: it flags fields that
-disagree with the typed stats, and when the submitter left stats blank it pre-fills them as unverified
-rows marked "read from screenshot" that confirmers can dispute. It never verifies a result. Uploaded
-screenshots are read from R2; pasted links are fetched only from `SCREENSHOT_URL_HOSTS`. Tesseract's
-accuracy on real, stylised in-game scoreboards still needs testing with real screenshots; the engine sits
-behind the `OcrEngine` interface so Cloud Vision or Textract can replace it.
+the worker runs Tesseract on the screenshot. It first tries the whole frame (header row plus
+kills/deaths columns). Stylised in-game boards defeat that, so it then cuts out each team table and the
+player's stats card, cleans them up (enlarge, invert, threshold; `apps/worker/src/preprocess.ts`) and reads
+them by word position. The reading is advisory only: it flags fields that disagree with the typed stats,
+and when the submitter left stats blank it pre-fills what it can as unverified rows marked "read from
+screenshot" that confirmers can dispute. It never verifies a result. Uploaded screenshots are read from
+R2; pasted links are fetched only from `SCREENSHOT_URL_HOSTS`.
+
+What it reads today is measured on one real **Hardpoint** scoreboard (the two-table layout with
+`RANK PLAYER SCORE OBJ. SCORE TIME`): player names matched to participants, each player's time on the
+hill, and the submitter's own eliminations and deaths from the stats card, which is attributed to them by
+the `#id` in their name and cross-checked against the Elim/D ratio (a digit OCR drops can be rebuilt from
+it). That screenshot does not show kills or deaths for the other seven players, so those are never
+filled. Search & Destroy and other layouts have not been tested with real screenshots; unrecognised
+layouts simply get no reading. The engine sits behind the `OcrEngine` interface so Cloud Vision or
+Textract can replace Tesseract.
 
 **Leaderboards** (`/leaderboards`). Pre-calculated standings per game mode for each month, each admin-defined
 season (`/staff/seasons`) and all time. Only verified results count; a win is 3 points and a loss 1, and

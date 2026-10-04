@@ -1,5 +1,5 @@
-import { createWorker, type Worker } from "tesseract.js";
-import type { OcrEngine } from "@cod/core";
+import { createWorker, PSM, type Worker } from "tesseract.js";
+import type { OcrEngine, OcrWord } from "@cod/core";
 
 /**
  * Tesseract (free, open source) running in-process. Language data is fetched on first use;
@@ -11,17 +11,31 @@ export function createTesseractEngine(): OcrEngine & { close(): Promise<void> } 
   const get = () =>
     (worker ??= createWorker("eng", 1, {
       ...(process.env.TESSERACT_LANG_PATH && { langPath: process.env.TESSERACT_LANG_PATH }),
-    }).then(async (w) => {
-      // Keep the gaps between scoreboard columns so numbers stay separate tokens.
-      await w.setParameters({ preserve_interword_spaces: "1" });
-      return w;
     }));
   return {
     name: "tesseract",
-    async recognize(image) {
+    async recognize(image, opts) {
       const w = await get();
-      const { data } = await w.recognize(image);
-      return { text: data.text, confidence: data.confidence };
+      // Keep the gaps between scoreboard columns so numbers stay separate tokens.
+      await w.setParameters({
+        preserve_interword_spaces: "1",
+        tessedit_pageseg_mode: opts?.sparse ? PSM.SPARSE_TEXT : PSM.AUTO,
+      });
+      const { data } = await w.recognize(image, {}, { text: true, blocks: true });
+      const words: OcrWord[] = (data.blocks ?? []).flatMap((b) =>
+        b.paragraphs.flatMap((p) =>
+          p.lines.flatMap((l) =>
+            l.words.map((x) => ({
+              text: x.text,
+              x0: x.bbox.x0,
+              y0: x.bbox.y0,
+              x1: x.bbox.x1,
+              y1: x.bbox.y1,
+            })),
+          ),
+        ),
+      );
+      return { text: data.text, confidence: data.confidence, words };
     },
     async close() {
       if (worker) await (await worker).terminate();

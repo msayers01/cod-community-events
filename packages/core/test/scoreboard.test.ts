@@ -110,3 +110,104 @@ describe("comparison and fill", () => {
     expect(planFill({ rows: matched, participants: 8, confidence: 85 })).toEqual([]);
   });
 });
+
+// ───────────── Hardpoint card (measured on a real screenshot) ─────────────
+
+import {
+  linesFromWords,
+  panelIsConsistent,
+  panelOwner,
+  parsePanel,
+  parseRows,
+  HARDPOINT_TABLE_COLUMNS,
+} from "../src/ocr/scoreboard.js";
+
+const w = (text: string, x0: number, y0: number, x1: number, y1: number) => ({
+  text,
+  x0,
+  y0,
+  x1,
+  y1,
+});
+// Word boxes as Tesseract reported them for the stats card on a real Hardpoint scoreboard.
+const card = (kills: string, deaths: string, ratio: string) => [
+  w("Mr", 294, 18, 337, 45),
+  w("Waternoos#1768499", 348, 18, 706, 45),
+  w("ELIMINATIONS", 1046, 40, 1302, 68),
+  w("DEATHS", 1486, 44, 1643, 73),
+  w("ELIM/D", 1821, 38, 1956, 71),
+  w("RATIO", 1975, 40, 2076, 68),
+  w(kills, 1116, 90, 1236, 182),
+  w(deaths, 1512, 90, 1624, 182),
+  w(ratio, 1826, 90, 2076, 182),
+  w("555", 2226, 90, 2453, 182),
+];
+
+describe("stats card", () => {
+  it("reads kills, deaths and the ratio under their labels, restoring the dropped decimal point", () => {
+    expect(parsePanel(card("41", "15", "273"))).toMatchObject({
+      kills: 41,
+      deaths: 15,
+      ratio: 2.73,
+      idDigits: "1768499",
+      name: "Waternoos",
+      repaired: false,
+    });
+  });
+  it("rebuilds a number that OCR dropped or garbled, using the ratio as a check", () => {
+    expect(parsePanel(card("4]", "15", "273"))).toMatchObject({
+      kills: 41,
+      deaths: 15,
+      repaired: true,
+    });
+    expect(parsePanel(card("41", "5", "273"))).toMatchObject({
+      kills: 41,
+      deaths: 15,
+      repaired: true,
+    });
+    expect(parsePanel(card("41", "", "273"))).toMatchObject({
+      kills: 41,
+      deaths: 15,
+      repaired: true,
+    });
+  });
+  it("refuses to trust a card whose numbers cannot be reconciled", () => {
+    const bad = parsePanel(card("41", "15", "310"))!;
+    expect(panelIsConsistent(bad)).toBe(false);
+    expect(panelIsConsistent(parsePanel(card("41", "15", "273"))!)).toBe(true);
+    expect(parsePanel([w("nothing", 0, 0, 10, 10)])).toBeNull();
+  });
+  it("is attributed to a player by the id in their name, or failing that a close name", () => {
+    const players = [
+      { playerId: "a", names: ["Mr Waternoos"], activisionId: "Mr Waternoos#1768499" },
+      { playerId: "b", names: ["Snaz"], activisionId: "Snaz#7777777" },
+    ];
+    const p = parsePanel(card("41", "15", "273"))!;
+    expect(panelOwner(p, players)).toBe("a");
+    expect(panelOwner({ ...p, idDigits: "1768400" }, players)).toBe("a"); // id misread, name still fits
+    expect(panelOwner({ ...p, idDigits: null, name: "Nobody" }, players)).toBeNull();
+  });
+});
+
+describe("table cells reassembled by position", () => {
+  it("turns one-word-per-line OCR into rows and reads the hill time column", () => {
+    const cell = (text: string, x: number, y: number) => w(text, x, y, x + 60, y + 30);
+    const lines = linesFromWords([
+      cell("3545", 600, 100),
+      cell("Snaz", 100, 102),
+      cell("525", 900, 98),
+      cell("29", 1200, 101),
+      cell("[5]Fiji", 100, 200),
+      cell("2725", 600, 203),
+      cell("515", 900, 199),
+      cell("42", 1200, 202),
+      cell("RANK", 20, 20),
+      cell("PLAYER", 100, 22),
+    ]);
+    expect(lines).toEqual(["RANK PLAYER", "Snaz 3545 525 29", "[5]Fiji 2725 515 42"]);
+    expect(parseRows(lines, HARDPOINT_TABLE_COLUMNS)).toEqual([
+      { rawName: "Snaz", stats: { hillTimeSeconds: 29 } },
+      { rawName: "[5]Fiji", stats: { hillTimeSeconds: 42 } },
+    ]);
+  });
+});

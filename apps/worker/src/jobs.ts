@@ -9,6 +9,7 @@ import {
   sweepVerificationWindows,
 } from "@cod/core";
 import { createTesseractEngine } from "./ocr-engine.js";
+import { cutRegions } from "./preprocess.js";
 import { loadScreenshot } from "./screenshots.js";
 
 let publisher: Publisher | null = null;
@@ -67,7 +68,7 @@ export async function handleTimer(job: Job<TimerJob>) {
     return;
   }
   if (data.kind === "sweep-screenshot-readings") {
-    await processPendingReadings({ engine: ocr, load: loadScreenshot });
+    await processPendingReadings({ engine: ocr, load: loadScreenshot, regions: cutRegions });
     return;
   }
   if (data.kind === "sweep-leaderboards") {

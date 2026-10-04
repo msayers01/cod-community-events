@@ -279,4 +279,72 @@ describe("screenshot reading", () => {
     expect(row).toMatchObject({ status: "PROCESSING", attempts: 1 });
     expect(await claimPendingReadings(1000)).not.toContain(fx.reading.id);
   });
+
+  it("falls back to reading each table and the stats card when the whole frame is unreadable", async () => {
+    const fx = await pendingResult();
+    await prisma.user.update({
+      where: { id: fx.players[0]!.id },
+      data: { activisionId: "Whoever#1768499" },
+    });
+    await claim(fx.reading.id);
+    const word = (text: string, x0: number, y0: number, x1: number, y1: number) => ({
+      text,
+      x0,
+      y0,
+      x1,
+      y1,
+    });
+    const cell = (text: string, x: number, y: number) => word(text, x, y, x + 60, y + 30);
+    const p = fx.players.map((u) => u.displayName);
+    const engine: OcrEngine = {
+      name: "fake-regions",
+      // The whole frame is garbage...
+      recognize: async (_img, opts) => {
+        if (!opts?.sparse) return { text: "??? !!!", confidence: 30 };
+        const kind = _img.toString();
+        if (kind === "panel")
+          return {
+            text: "",
+            confidence: 70,
+            words: [
+              word("Whoever#1768499", 348, 18, 706, 45),
+              word("ELIMINATIONS", 1046, 40, 1302, 68),
+              word("DEATHS", 1486, 44, 1643, 73),
+              word("ELIM/D", 1821, 38, 1956, 71),
+              word("4]", 1116, 90, 1236, 182), // garbled, rebuilt from the ratio
+              word("15", 1512, 90, 1624, 182),
+              word("273", 1826, 90, 2076, 182),
+            ],
+          };
+        const names = kind === "left" ? p.slice(0, 2) : p.slice(2, 4);
+        return {
+          text: "",
+          confidence: 80,
+          words: names.flatMap((n, i) => [
+            cell(n, 100, 100 + i * 100),
+            cell("3000", 600, 100 + i * 100),
+            cell("500", 900, 100 + i * 100),
+            cell(String(20 + i), 1200, 100 + i * 100),
+          ]),
+        };
+      },
+    };
+    const regions = async () =>
+      (["left", "right", "panel"] as const).map((g) => ({
+        kind: g === "panel" ? ("panel" as const) : ("table" as const),
+        group: g,
+        image: Buffer.from(g),
+      }));
+    expect(await processReading(fx.reading.id, { engine, load, regions })).toBe("completed");
+
+    const done = await prisma.screenshotReading.findUniqueOrThrow({ where: { id: fx.reading.id } });
+    expect(done.filledStats).toBe(true);
+    const stats = await prisma.playerMatchStat.findMany({
+      where: { submissionId: fx.submission.id },
+    });
+    // Only the player the card belongs to is filled, with their hill time from the table.
+    expect(stats.map((s) => [s.playerId, s.kills, s.deaths, s.hillTimeSeconds, s.source])).toEqual([
+      [fx.players[0]!.id, 41, 15, 20, "OCR"],
+    ]);
+  });
 });
