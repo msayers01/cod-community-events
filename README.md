@@ -154,6 +154,14 @@ stored in Postgres (no object storage needed) and served from `/api/avatars/<id>
 versioned, long-cached URL. Without a picture a colored initials badge is shown; OAuth avatar URLs are
 deliberately not hotlinked. Staff with `content.remove` can take a picture down with a logged reason.
 
+## Deploying
+
+One Docker image runs every service (`SERVICE=web|worker|realtime|bot|migrate`). Services validate
+their environment at start-up and refuse to run production with an unsafe configuration (for example a
+missing auth secret). `deploy/smoke.sh` builds the image and brings the full stack up from an empty
+database; CI runs it on every change. See [docs/05-deployment.md](docs/05-deployment.md) for the
+Railway runbook, third-party setup, backups, releasing and the launch checklist.
+
 ## Scripts
 
 | Command                                      | What it does                            |
