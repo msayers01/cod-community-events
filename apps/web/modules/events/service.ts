@@ -285,6 +285,7 @@ export async function saveTemplateFromEvent(actor: Actor, eventId: string, name:
     rules: event.rules,
     entryType: event.entryType,
     entryRequirements: event.entryRequirements,
+    randomization: event.randomization,
     description: event.description,
   });
   return prisma.eventTemplate.upsert({

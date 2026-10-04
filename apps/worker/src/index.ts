@@ -4,7 +4,7 @@ import { initSentry } from "./sentry.js";
 initSentry("worker");
 import { prisma } from "@cod/db";
 import { processOutboxBatch } from "./outbox.js";
-import { redis, startTimerWorker, timerQueue } from "./jobs.js";
+import { closeOcr, redis, startTimerWorker, timerQueue } from "./jobs.js";
 
 const OUTBOX_INTERVAL_MS = 1000;
 
@@ -23,11 +23,24 @@ async function main() {
     { name: "sweep", data: { kind: "sweep-check-in" } },
   );
 
+  // Phase 2 sweeps were previously triggered elsewhere; Phase 3 schedules its own here.
+  await queue.upsertJobScheduler(
+    "sweep-screenshot-readings",
+    { every: 15_000 },
+    { name: "sweep", data: { kind: "sweep-screenshot-readings" } },
+  );
+  await queue.upsertJobScheduler(
+    "sweep-leaderboards",
+    { every: 10 * 60_000 },
+    { name: "sweep", data: { kind: "sweep-leaderboards" } },
+  );
+
   console.log("[worker] started");
   let running = true;
   const stop = async () => {
     running = false;
     await worker.close();
+    await closeOcr();
     await queue.close();
     await prisma.$disconnect();
     connection.disconnect();

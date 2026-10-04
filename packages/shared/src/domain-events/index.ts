@@ -34,7 +34,11 @@ export type DomainEvent =
   | { type: "AppealFiled"; appealId: string; appellantId: string }
   | { type: "AppealDecided"; appealId: string; appellantId: string; status: string }
   | { type: "ReputationChanged"; userId: string }
-  | { type: "StaffActionLogged"; logId: string };
+  | { type: "StaffActionLogged"; logId: string }
+  | { type: "ScreenshotRead"; submissionId: string; matchId: string; eventId: string }
+  | { type: "ThrowFlagRaised"; flagId: string; userId: string }
+  | { type: "ThrowFlagReviewed"; flagId: string; status: string }
+  | { type: "LeaderboardRefreshRequested"; period: string; periodKey: string };
 
 export type DomainEventType = DomainEvent["type"];
 
@@ -71,4 +75,8 @@ export const DOMAIN_EVENT_TYPES = [
   "AppealDecided",
   "ReputationChanged",
   "StaffActionLogged",
+  "ScreenshotRead",
+  "ThrowFlagRaised",
+  "ThrowFlagReviewed",
+  "LeaderboardRefreshRequested",
 ] as const satisfies readonly DomainEventType[];

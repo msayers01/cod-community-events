@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { isStaff } from "@cod/shared";
+import { hasPermission, isStaff } from "@cod/shared";
 import { getCurrentUser } from "@/lib/session";
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
@@ -23,6 +23,16 @@ export default async function StaffLayout({ children }: { children: React.ReactN
         <Link href="/staff/appeals" className="text-muted hover:text-ink">
           Appeals
         </Link>
+        {hasPermission(user.actor, "throwflag.review") && (
+          <Link href="/staff/flags" className="text-muted hover:text-ink">
+            Flags
+          </Link>
+        )}
+        {hasPermission(user.actor, "season.manage") && (
+          <Link href="/staff/seasons" className="text-muted hover:text-ink">
+            Seasons
+          </Link>
+        )}
         <Link href="/staff/log" className="text-muted hover:text-ink">
           Action log
         </Link>

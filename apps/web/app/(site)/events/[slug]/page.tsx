@@ -71,6 +71,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             <span className="tag">{label(event.region)}</span>
             <span className="tag">{label(event.platform)}</span>
             <span className="tag">{label(event.entryType)}</span>
+            {event.randomization !== "RANDOM" && (
+              <span className="tag">{label(event.randomization)} teams</span>
+            )}
           </div>
         </header>
 

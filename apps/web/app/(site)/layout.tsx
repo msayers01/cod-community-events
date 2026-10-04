@@ -30,6 +30,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href="/" className="font-semibold tracking-tight">
                 <span className="text-accent">●</span> CoD Community Events
               </Link>
+              <Link href="/leaderboards" className="text-sm text-muted hover:text-ink">
+                Leaderboards
+              </Link>
               <Link href="/blacklist" className="text-sm text-muted hover:text-ink">
                 Verified reports
               </Link>

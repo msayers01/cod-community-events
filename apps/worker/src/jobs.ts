@@ -2,7 +2,14 @@ import { Queue, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { prisma, emit } from "@cod/db";
 import { createPublisher, rooms, type Publisher } from "@cod/realtime";
-import { expireBlacklistEntries, sweepVerificationWindows } from "@cod/core";
+import {
+  expireBlacklistEntries,
+  processPendingReadings,
+  sweepLeaderboards,
+  sweepVerificationWindows,
+} from "@cod/core";
+import { createTesseractEngine } from "./ocr-engine.js";
+import { loadScreenshot } from "./screenshots.js";
 
 let publisher: Publisher | null = null;
 const rt = () => (publisher ??= createPublisher());
@@ -14,7 +21,12 @@ export type TimerJob =
   | { kind: "sweep-check-in" }
   | { kind: "sweep-payout-reminders" }
   | { kind: "sweep-verification-windows" }
-  | { kind: "sweep-blacklist-expiry" };
+  | { kind: "sweep-blacklist-expiry" }
+  | { kind: "sweep-screenshot-readings" }
+  | { kind: "sweep-leaderboards" };
+
+const ocr = createTesseractEngine();
+export const closeOcr = () => ocr.close();
 
 export function redis() {
   return new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
@@ -52,6 +64,14 @@ export async function handleTimer(job: Job<TimerJob>) {
   }
   if (data.kind === "sweep-verification-windows") {
     await sweepVerificationWindows();
+    return;
+  }
+  if (data.kind === "sweep-screenshot-readings") {
+    await processPendingReadings({ engine: ocr, load: loadScreenshot });
+    return;
+  }
+  if (data.kind === "sweep-leaderboards") {
+    await sweepLeaderboards();
     return;
   }
   if (data.kind === "sweep-blacklist-expiry") {

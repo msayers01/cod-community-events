@@ -273,7 +273,19 @@ Pre-calculated totals per user for fast profile loading: events played and hoste
 
 ### Leaderboard Entry (Phase 3)
 
-Pre-calculated standings for a period (e.g., a month) across all events on the site.
+Pre-calculated standings for a period (a month, a season, or all time) and game mode across all events on the site: rank, points, wins, losses, kills, deaths. Rewritten wholesale by the worker. A **Season** is an admin-defined, non-overlapping date window.
+
+### Throw Flag (Phase 3)
+
+A staff-only anomaly raised for moderator review after a match is verified: the player, which signal fired (performance far below their own baseline, unusually many losses in one event, unusually many losses with one teammate), the related match, event and teammate, the observed numbers, and a review status (open, under review, dismissed, escalated). Never public, never shown to the player, never a sanction; escalating opens a normal report. Detection thresholds are not stored.
+
+### Screenshot Reading (Phase 3)
+
+What the worker read from a submission's scoreboard screenshot: status, engine, confidence, the rows it recognised and matched to players, and any fields that disagree with the submitted stats. Advisory only. Stats it fills in are marked as read from the screenshot.
+
+### Team formation mode (Phase 3)
+
+Each event has a randomization mode: fully random (default), skill-balanced, or no repeat teammates. The inputs a mode uses are snapshotted into the spin pool, so they are covered by the commitment and published with the spin.
 
 ---
 

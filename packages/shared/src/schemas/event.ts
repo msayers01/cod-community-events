@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EntryType, EventFormat, GameMode, Platform, Region } from "../enums.js";
+import { EntryType, EventFormat, GameMode, Platform, RandomizationMode, Region } from "../enums.js";
 
 const enumValues = <T extends Record<string, string>>(e: T) =>
   Object.values(e) as [T[keyof T], ...T[keyof T][]];
@@ -41,6 +41,7 @@ export const createEventSchema = z
     rules: eventRulesSchema.prefault({}),
     entryType: z.enum(enumValues(EntryType)).default(EntryType.OPEN),
     entryRequirements: entryRequirementsSchema.nullable().default(null),
+    randomization: z.enum(enumValues(RandomizationMode)).default(RandomizationMode.RANDOM),
     startsAt: z.coerce.date(),
     checkInOpensAt: z.coerce.date(),
     checkInClosesAt: z.coerce.date(),
@@ -104,6 +105,7 @@ export const eventTemplateSettingsSchema = z.object({
   rules: eventRulesSchema.prefault({}),
   entryType: z.enum(enumValues(EntryType)).default(EntryType.OPEN),
   entryRequirements: entryRequirementsSchema.nullable().default(null),
+  randomization: z.enum(enumValues(RandomizationMode)).default(RandomizationMode.RANDOM),
   description: z.string().trim().max(5000).default(""),
 });
 export type EventTemplateSettings = z.infer<typeof eventTemplateSettingsSchema>;

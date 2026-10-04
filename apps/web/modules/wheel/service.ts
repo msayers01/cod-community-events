@@ -3,13 +3,62 @@ import {
   canManageEvent,
   commit,
   deriveResult,
+  pairCounts,
   roundMachine,
+  skillRating,
   type Actor,
+  type RandomizationMode,
   type SpinPool,
   type SpinResult,
 } from "@cod/shared";
 import { DomainError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { publishEventUpdate } from "@/modules/realtime/publish";
+
+/**
+ * Snapshot everything the event's team-formation mode needs into the pool, so it is
+ * covered by the commitment and published with the spin. Fully random pools carry
+ * nothing extra.
+ */
+async function snapshotPool(
+  tx: Prisma.TransactionClient,
+  event: { id: string; teamSize: number; randomization: RandomizationMode },
+  playerIds: string[],
+): Promise<SpinPool> {
+  const base = { playerIds, teamSize: event.teamSize };
+  if (event.randomization === "SKILL_BALANCED") {
+    const summaries = await tx.reputationSummary.findMany({
+      where: { userId: { in: playerIds } },
+      select: {
+        userId: true,
+        verifiedMatches: true,
+        verifiedWins: true,
+        kills: true,
+        deaths: true,
+      },
+    });
+    const bySummary = new Map(summaries.map((s) => [s.userId, s]));
+    return {
+      ...base,
+      mode: "SKILL_BALANCED",
+      ratings: playerIds.map((id) => [id, skillRating(bySummary.get(id))] as const),
+    };
+  }
+  if (event.randomization === "NO_REPEAT_TEAMMATES") {
+    const prior = await tx.roundTeam.findMany({
+      where: { round: { eventId: event.id } },
+      include: { members: { select: { userId: true } } },
+    });
+    return {
+      ...base,
+      mode: "NO_REPEAT_TEAMMATES",
+      teammateCounts: pairCounts(
+        prior.map((t) => t.members.map((m) => m.userId)),
+        playerIds,
+      ),
+    };
+  }
+  return base;
+}
 
 /**
  * Step 1: publish a commitment for the next round. The pool is snapshotted from
@@ -42,10 +91,8 @@ export async function commitSpin(actor: Actor, eventId: string) {
     if (poolRegs.length < event.teamSize * 2)
       throw new DomainError("POOL_TOO_SMALL", "Need at least two full teams in the pool");
 
-    const pool: SpinPool = {
-      playerIds: poolRegs.map((r) => r.playerId).sort(),
-      teamSize: event.teamSize,
-    };
+    const playerIds = poolRegs.map((r) => r.playerId).sort();
+    const pool = await snapshotPool(tx, event, playerIds);
     const c = commit(pool);
     const round = await tx.round.create({ data: { eventId, roundNumber } });
     const spin = await tx.spin.create({
